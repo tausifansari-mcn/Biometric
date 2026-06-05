@@ -1,0 +1,188 @@
+<h2>How should the dashboard be laid out?</h2>
+<p class="subtitle">Same teal theme and dark glass tooltips — just pick the page structure</p>
+
+<div class="cards">
+
+  <!-- Option A: Calendar-First Full Width -->
+  <div class="card" data-choice="calendar-first" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#f0fdfa;padding:14px;border-radius:8px;min-height:240px;border:1px solid #ccfbf1">
+      <!-- Header -->
+      <div style="background:linear-gradient(135deg,#0f766e,#0891b2);border-radius:8px;padding:7px 10px;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="color:#fff;font-size:10px;font-weight:700">Biometric Attendance</div>
+        <div style="display:flex;gap:4px">
+          <div style="background:rgba(255,255,255,0.2);color:#fff;font-size:8px;padding:2px 6px;border-radius:10px">June 2025</div>
+          <div style="background:#ef4444;color:#fff;font-size:8px;padding:2px 6px;border-radius:10px">Logout</div>
+        </div>
+      </div>
+      <!-- Summary cards row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:8px">
+        <div style="background:#fff;border-radius:6px;padding:6px;text-align:center;border-bottom:2px solid #10b981">
+          <div style="color:#10b981;font-size:13px;font-weight:700">18</div>
+          <div style="color:#64748b;font-size:7px">Present</div>
+        </div>
+        <div style="background:#fff;border-radius:6px;padding:6px;text-align:center;border-bottom:2px solid #f59e0b">
+          <div style="color:#f59e0b;font-size:13px;font-weight:700">4</div>
+          <div style="color:#64748b;font-size:7px">Half Day</div>
+        </div>
+        <div style="background:#fff;border-radius:6px;padding:6px;text-align:center;border-bottom:2px solid #ef4444">
+          <div style="color:#ef4444;font-size:13px;font-weight:700">3</div>
+          <div style="color:#64748b;font-size:7px">Absent</div>
+        </div>
+      </div>
+      <!-- Big calendar -->
+      <div style="background:#fff;border-radius:8px;padding:8px;flex:1">
+        <div style="text-align:center;font-size:8px;font-weight:700;color:#0f766e;margin-bottom:4px">JUNE 2025</div>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">
+          <div style="color:#94a3b8;font-size:7px;text-align:center">Su</div>
+          <div style="color:#94a3b8;font-size:7px;text-align:center">Mo</div>
+          <div style="color:#94a3b8;font-size:7px;text-align:center">Tu</div>
+          <div style="color:#94a3b8;font-size:7px;text-align:center">We</div>
+          <div style="color:#94a3b8;font-size:7px;text-align:center">Th</div>
+          <div style="color:#94a3b8;font-size:7px;text-align:center">Fr</div>
+          <div style="color:#94a3b8;font-size:7px;text-align:center">Sa</div>
+          <div></div>
+          <div style="background:#99f6e4;border-radius:3px;font-size:7px;text-align:center;padding:3px 0;color:#065f46;font-weight:600">2</div>
+          <div style="background:#99f6e4;border-radius:3px;font-size:7px;text-align:center;padding:3px 0;color:#065f46;font-weight:600">3</div>
+          <div style="background:#99f6e4;border-radius:3px;font-size:7px;text-align:center;padding:3px 0;color:#065f46;font-weight:600">4</div>
+          <div style="background:#fef08a;border-radius:3px;font-size:7px;text-align:center;padding:3px 0;color:#854d0e;font-weight:600">5</div>
+          <div style="background:#fecaca;border-radius:3px;font-size:7px;text-align:center;padding:3px 0;color:#991b1b;font-weight:600">6</div>
+          <div style="color:#cbd5e1;font-size:7px;text-align:center;padding:3px 0">7</div>
+          <div style="color:#cbd5e1;font-size:7px;text-align:center;padding:3px 0">8</div>
+          <div style="background:#99f6e4;border-radius:3px;font-size:7px;text-align:center;padding:3px 0;color:#065f46;font-weight:600">9</div>
+          <div style="background:#99f6e4;border-radius:3px;font-size:7px;text-align:center;padding:3px 0;color:#065f46;font-weight:600">10</div>
+          <div style="background:#99f6e4;border-radius:3px;font-size:7px;text-align:center;padding:3px 0;color:#065f46;font-weight:600">11</div>
+          <div style="background:#99f6e4;border-radius:3px;font-size:7px;text-align:center;padding:3px 0;color:#065f46;font-weight:600">12</div>
+          <div style="background:#99f6e4;border-radius:3px;font-size:7px;text-align:center;padding:3px 0;color:#065f46;font-weight:600">13</div>
+        </div>
+      </div>
+      <!-- No table below, just legend -->
+      <div style="display:flex;gap:8px;justify-content:center;margin-top:6px">
+        <div style="display:flex;align-items:center;gap:3px"><div style="width:8px;height:8px;background:#99f6e4;border-radius:2px"></div><span style="font-size:7px;color:#64748b">Present</span></div>
+        <div style="display:flex;align-items:center;gap:3px"><div style="width:8px;height:8px;background:#fef08a;border-radius:2px"></div><span style="font-size:7px;color:#64748b">Half Day</span></div>
+        <div style="display:flex;align-items:center;gap:3px"><div style="width:8px;height:8px;background:#fecaca;border-radius:2px"></div><span style="font-size:7px;color:#64748b">Absent</span></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Calendar-First (Recommended)</h3>
+      <p>Large full-width calendar dominates the view. Summary stats on top, legend below. No table — tooltips give the detail. Very clean, nothing distracts from the calendar.</p>
+    </div>
+  </div>
+
+  <!-- Option B: Split — Calendar Left, Table Right -->
+  <div class="card" data-choice="split-view" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#f0fdfa;padding:14px;border-radius:8px;min-height:240px;border:1px solid #ccfbf1">
+      <!-- Header -->
+      <div style="background:linear-gradient(135deg,#0f766e,#0891b2);border-radius:8px;padding:7px 10px;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="color:#fff;font-size:10px;font-weight:700">Biometric Attendance</div>
+        <div style="display:flex;gap:4px">
+          <div style="background:rgba(255,255,255,0.2);color:#fff;font-size:8px;padding:2px 6px;border-radius:10px">June 2025</div>
+          <div style="background:#ef4444;color:#fff;font-size:8px;padding:2px 6px;border-radius:10px">Logout</div>
+        </div>
+      </div>
+      <!-- Stats row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:8px">
+        <div style="background:#fff;border-radius:6px;padding:5px;text-align:center;border-bottom:2px solid #10b981"><div style="color:#10b981;font-size:12px;font-weight:700">18</div><div style="color:#64748b;font-size:7px">P</div></div>
+        <div style="background:#fff;border-radius:6px;padding:5px;text-align:center;border-bottom:2px solid #f59e0b"><div style="color:#f59e0b;font-size:12px;font-weight:700">4</div><div style="color:#64748b;font-size:7px">HD</div></div>
+        <div style="background:#fff;border-radius:6px;padding:5px;text-align:center;border-bottom:2px solid #ef4444"><div style="color:#ef4444;font-size:12px;font-weight:700">3</div><div style="color:#64748b;font-size:7px">A</div></div>
+      </div>
+      <!-- Two column: calendar + table -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <!-- Calendar -->
+        <div style="background:#fff;border-radius:6px;padding:6px">
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px">
+            <div style="color:#94a3b8;font-size:6px;text-align:center">S</div>
+            <div style="color:#94a3b8;font-size:6px;text-align:center">M</div>
+            <div style="color:#94a3b8;font-size:6px;text-align:center">T</div>
+            <div style="color:#94a3b8;font-size:6px;text-align:center">W</div>
+            <div style="color:#94a3b8;font-size:6px;text-align:center">T</div>
+            <div style="color:#94a3b8;font-size:6px;text-align:center">F</div>
+            <div style="color:#94a3b8;font-size:6px;text-align:center">S</div>
+            <div></div>
+            <div style="background:#99f6e4;border-radius:2px;font-size:6px;text-align:center;padding:2px 0;color:#065f46">2</div>
+            <div style="background:#99f6e4;border-radius:2px;font-size:6px;text-align:center;padding:2px 0;color:#065f46">3</div>
+            <div style="background:#99f6e4;border-radius:2px;font-size:6px;text-align:center;padding:2px 0;color:#065f46">4</div>
+            <div style="background:#fef08a;border-radius:2px;font-size:6px;text-align:center;padding:2px 0;color:#854d0e">5</div>
+            <div style="background:#fecaca;border-radius:2px;font-size:6px;text-align:center;padding:2px 0;color:#991b1b">6</div>
+            <div style="color:#cbd5e1;font-size:6px;text-align:center;padding:2px 0">7</div>
+            <div style="color:#cbd5e1;font-size:6px;text-align:center;padding:2px 0">8</div>
+            <div style="background:#99f6e4;border-radius:2px;font-size:6px;text-align:center;padding:2px 0;color:#065f46">9</div>
+            <div style="background:#99f6e4;border-radius:2px;font-size:6px;text-align:center;padding:2px 0;color:#065f46">10</div>
+            <div style="background:#99f6e4;border-radius:2px;font-size:6px;text-align:center;padding:2px 0;color:#065f46">11</div>
+            <div style="background:#99f6e4;border-radius:2px;font-size:6px;text-align:center;padding:2px 0;color:#065f46">12</div>
+            <div style="background:#99f6e4;border-radius:2px;font-size:6px;text-align:center;padding:2px 0;color:#065f46">13</div>
+          </div>
+        </div>
+        <!-- Table -->
+        <div style="background:#fff;border-radius:6px;padding:6px;overflow:hidden">
+          <div style="font-size:7px;font-weight:700;color:#0f766e;margin-bottom:4px">Recent Records</div>
+          <div style="display:grid;grid-template-columns:auto 1fr auto;gap:1px 4px">
+            <div style="color:#94a3b8;font-size:6px">Date</div><div style="color:#94a3b8;font-size:6px">In → Out</div><div style="color:#94a3b8;font-size:6px">Hrs</div>
+            <div style="color:#1e293b;font-size:6px">Jun 13</div><div style="color:#64748b;font-size:6px">9:00→6:30</div><div style="background:#99f6e4;color:#065f46;font-size:5px;padding:1px 3px;border-radius:3px;font-weight:700">P</div>
+            <div style="color:#1e293b;font-size:6px">Jun 12</div><div style="color:#64748b;font-size:6px">9:15→6:00</div><div style="background:#99f6e4;color:#065f46;font-size:5px;padding:1px 3px;border-radius:3px;font-weight:700">P</div>
+            <div style="color:#1e293b;font-size:6px">Jun 11</div><div style="color:#64748b;font-size:6px">9:30→1:30</div><div style="background:#fef08a;color:#854d0e;font-size:5px;padding:1px 3px;border-radius:3px;font-weight:700">HD</div>
+            <div style="color:#1e293b;font-size:6px">Jun 10</div><div style="color:#64748b;font-size:6px">9:00→6:45</div><div style="background:#99f6e4;color:#065f46;font-size:5px;padding:1px 3px;border-radius:3px;font-weight:700">P</div>
+            <div style="color:#1e293b;font-size:6px">Jun 9</div><div style="color:#64748b;font-size:6px">—</div><div style="background:#fecaca;color:#991b1b;font-size:5px;padding:1px 3px;border-radius:3px;font-weight:700">A</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Split: Calendar + Table Side by Side</h3>
+      <p>Calendar on the left, recent records table on the right. More information density on one screen. Good if you want both views simultaneously without scrolling.</p>
+    </div>
+  </div>
+
+  <!-- Option C: Calendar + Table Stacked -->
+  <div class="card" data-choice="stacked" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#f0fdfa;padding:14px;border-radius:8px;min-height:240px;border:1px solid #ccfbf1">
+      <!-- Header -->
+      <div style="background:linear-gradient(135deg,#0f766e,#0891b2);border-radius:8px;padding:7px 10px;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="color:#fff;font-size:10px;font-weight:700">Biometric Attendance</div>
+        <div style="display:flex;gap:4px">
+          <div style="background:rgba(255,255,255,0.2);color:#fff;font-size:8px;padding:2px 6px;border-radius:10px">June 2025</div>
+          <div style="background:#ef4444;color:#fff;font-size:8px;padding:2px 6px;border-radius:10px">Logout</div>
+        </div>
+      </div>
+      <!-- Stats row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:6px">
+        <div style="background:#fff;border-radius:6px;padding:5px;text-align:center;border-bottom:2px solid #10b981"><div style="color:#10b981;font-size:12px;font-weight:700">18</div><div style="color:#64748b;font-size:7px">P</div></div>
+        <div style="background:#fff;border-radius:6px;padding:5px;text-align:center;border-bottom:2px solid #f59e0b"><div style="color:#f59e0b;font-size:12px;font-weight:700">4</div><div style="color:#64748b;font-size:7px">HD</div></div>
+        <div style="background:#fff;border-radius:6px;padding:5px;text-align:center;border-bottom:2px solid #ef4444"><div style="color:#ef4444;font-size:12px;font-weight:700">3</div><div style="color:#64748b;font-size:7px">A</div></div>
+      </div>
+      <!-- Calendar -->
+      <div style="background:#fff;border-radius:6px;padding:6px;margin-bottom:5px">
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px">
+          <div style="color:#94a3b8;font-size:6px;text-align:center">Su</div><div style="color:#94a3b8;font-size:6px;text-align:center">Mo</div><div style="color:#94a3b8;font-size:6px;text-align:center">Tu</div><div style="color:#94a3b8;font-size:6px;text-align:center">We</div><div style="color:#94a3b8;font-size:6px;text-align:center">Th</div><div style="color:#94a3b8;font-size:6px;text-align:center">Fr</div><div style="color:#94a3b8;font-size:6px;text-align:center">Sa</div>
+          <div></div>
+          <div style="background:#99f6e4;border-radius:2px;font-size:6px;text-align:center;padding:2px 0;color:#065f46">2</div>
+          <div style="background:#99f6e4;border-radius:2px;font-size:6px;text-align:center;padding:2px 0;color:#065f46">3</div>
+          <div style="background:#99f6e4;border-radius:2px;font-size:6px;text-align:center;padding:2px 0;color:#065f46">4</div>
+          <div style="background:#fef08a;border-radius:2px;font-size:6px;text-align:center;padding:2px 0;color:#854d0e">5</div>
+          <div style="background:#fecaca;border-radius:2px;font-size:6px;text-align:center;padding:2px 0;color:#991b1b">6</div>
+          <div style="color:#cbd5e1;font-size:6px;text-align:center;padding:2px 0">7</div>
+          <div style="color:#cbd5e1;font-size:6px;text-align:center;padding:2px 0">8</div>
+        </div>
+      </div>
+      <!-- Table below -->
+      <div style="background:#fff;border-radius:6px;padding:6px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 0.5fr;gap:1px 4px">
+          <div style="color:#0f766e;font-size:6px;font-weight:700">Date</div>
+          <div style="color:#0f766e;font-size:6px;font-weight:700">Punch In</div>
+          <div style="color:#0f766e;font-size:6px;font-weight:700">Punch Out</div>
+          <div style="color:#0f766e;font-size:6px;font-weight:700">Hrs</div>
+          <div style="color:#0f766e;font-size:6px;font-weight:700">St</div>
+          <div style="color:#1e293b;font-size:6px">Jun 13</div><div style="color:#64748b;font-size:6px">9:00 AM</div><div style="color:#64748b;font-size:6px">6:30 PM</div><div style="color:#64748b;font-size:6px">9:30</div><div style="background:#99f6e4;color:#065f46;font-size:5px;padding:1px 2px;border-radius:2px;font-weight:700">P</div>
+          <div style="color:#1e293b;font-size:6px">Jun 11</div><div style="color:#64748b;font-size:6px">9:30 AM</div><div style="color:#64748b;font-size:6px">1:30 PM</div><div style="color:#64748b;font-size:6px">4:00</div><div style="background:#fef08a;color:#854d0e;font-size:5px;padding:1px 2px;border-radius:2px;font-weight:700">HD</div>
+          <div style="color:#1e293b;font-size:6px">Jun 9</div><div style="color:#cbd5e1;font-size:6px">—</div><div style="color:#cbd5e1;font-size:6px">—</div><div style="color:#cbd5e1;font-size:6px">—</div><div style="background:#fecaca;color:#991b1b;font-size:5px;padding:1px 2px;border-radius:2px;font-weight:700">A</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Calendar + Table Stacked</h3>
+      <p>Full-width calendar on top, detailed records table below. Scroll down to see the table. Most information available, familiar layout, works great on desktop and mobile.</p>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:20px;text-align:center">Check <strong>http://localhost:61413</strong> — click your preferred layout, then tell me here</p>

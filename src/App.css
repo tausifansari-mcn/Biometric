@@ -1,0 +1,644 @@
+/* ── Reset ──────────────────────────────────────────────────────── */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+  background: #f0fdfa;
+  min-height: 100vh;
+  color: #1e293b;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Login ──────────────────────────────────────────────────────── */
+.login-bg {
+  min-height: 100vh;
+  background: linear-gradient(145deg, #0f766e 0%, #0891b2 60%, #06b6d4 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.login-card {
+  background: #fff;
+  border-radius: 28px;
+  padding: 48px 44px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.22);
+}
+
+.login-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 36px;
+}
+
+.login-brand h1 {
+  font-size: 1.55rem;
+  font-weight: 800;
+  color: #0f766e;
+  letter-spacing: -0.02em;
+}
+
+.login-brand p {
+  font-size: 0.85rem;
+  color: #64748b;
+  font-weight: 400;
+}
+
+.login-form { display: flex; flex-direction: column; gap: 0; }
+
+.field { margin-bottom: 18px; }
+
+.field label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #475569;
+  margin-bottom: 7px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.field input {
+  width: 100%;
+  padding: 12px 15px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  color: #0f172a;
+  background: #f8fafc;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.field input:focus {
+  border-color: #0f766e;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+}
+
+.form-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  font-size: 0.84rem;
+  padding: 10px 14px;
+  border-radius: 10px;
+  margin-bottom: 14px;
+}
+
+.login-btn {
+  margin-top: 6px;
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, #0f766e 0%, #0891b2 100%);
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.01em;
+  transition: opacity 0.2s, transform 0.1s;
+  box-shadow: 0 6px 20px rgba(15, 118, 110, 0.35);
+}
+
+.login-btn:hover:not(:disabled) { opacity: 0.9; }
+.login-btn:active:not(:disabled) { transform: scale(0.99); }
+.login-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.login-hint {
+  text-align: center;
+  font-size: 0.76rem;
+  color: #94a3b8;
+  margin-top: 22px;
+}
+
+/* ── Dashboard Shell ────────────────────────────────────────────── */
+.dashboard {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+}
+
+/* ── Header ─────────────────────────────────────────────────────── */
+.dash-header {
+  background: linear-gradient(135deg, #0f766e 0%, #0891b2 100%);
+  border-radius: 22px;
+  padding: 20px 28px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 22px;
+  box-shadow: 0 10px 30px rgba(15, 118, 110, 0.28);
+}
+
+.header-left { display: flex; flex-direction: column; gap: 7px; }
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-text {
+  font-size: 1.18rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+
+.header-emp {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 2px;
+}
+
+.emp-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.emp-chip {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.15);
+  padding: 2px 10px;
+  border-radius: 20px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.month-wrap {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 30px;
+  padding: 7px 16px;
+  cursor: pointer;
+}
+
+.month-lbl {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.month-input {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  outline: none;
+  cursor: pointer;
+}
+
+.month-input::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(1.2);
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+.logout-btn {
+  background: rgba(239, 68, 68, 0.85);
+  color: #fff;
+  border: none;
+  padding: 8px 22px;
+  border-radius: 30px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+  letter-spacing: 0.01em;
+}
+
+.logout-btn:hover { background: #ef4444; }
+
+/* ── Stats Row ──────────────────────────────────────────────────── */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.stat-card {
+  background: #fff;
+  border-radius: 18px;
+  padding: 22px 20px 18px;
+  text-align: center;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.055);
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.09);
+}
+
+.stat-icon {
+  font-size: 1.1rem;
+  font-weight: 800;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 10px;
+}
+
+.si-present { background: #d1fae5; color: #059669; }
+.si-halfday { background: #fef3c7; color: #d97706; }
+.si-absent  { background: #fee2e2; color: #dc2626; }
+
+.stat-num {
+  font-size: 2.6rem;
+  font-weight: 900;
+  line-height: 1;
+  margin-bottom: 5px;
+  letter-spacing: -0.03em;
+}
+
+.sn-present { color: #059669; }
+.sn-halfday { color: #d97706; }
+.sn-absent  { color: #dc2626; }
+
+.stat-lbl {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.stat-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-radius: 0 0 18px 18px;
+}
+
+.sb-present { background: linear-gradient(90deg, #10b981, #34d399); }
+.sb-halfday { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+.sb-absent  { background: linear-gradient(90deg, #ef4444, #f87171); }
+
+/* ── Loader ─────────────────────────────────────────────────────── */
+.loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 48px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #0f766e;
+}
+
+.loader-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #0f766e;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.7); }
+}
+
+.dash-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  padding: 12px 16px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  font-size: 0.88rem;
+}
+
+/* ── Calendar Card ──────────────────────────────────────────────── */
+.cal-card {
+  background: #fff;
+  border-radius: 22px;
+  padding: 28px 24px 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.055);
+}
+
+/* ── react-calendar overrides ───────────────────────────────────── */
+.att-cal {
+  width: 100%;
+  border: none;
+  font-family: inherit;
+  overflow: visible;
+}
+
+/* Navigation bar */
+.att-cal .react-calendar__navigation {
+  display: flex;
+  align-items: center;
+  margin-bottom: 18px;
+  height: auto;
+}
+
+.att-cal .react-calendar__navigation button {
+  background: none;
+  border: none;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f766e;
+  cursor: pointer;
+  padding: 7px 12px;
+  border-radius: 10px;
+  min-width: auto;
+  transition: background 0.15s;
+  font-family: inherit;
+}
+
+.att-cal .react-calendar__navigation button:hover:not(:disabled) {
+  background: #f0fdfa;
+  color: #065f46;
+}
+
+.att-cal .react-calendar__navigation button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.att-cal .react-calendar__navigation__label__labelText {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #0f766e;
+  letter-spacing: -0.01em;
+}
+
+/* Weekday headers */
+.att-cal .react-calendar__month-view__weekdays {
+  margin-bottom: 6px;
+}
+
+.att-cal .react-calendar__month-view__weekdays__weekday {
+  text-align: center;
+  padding: 5px 0;
+}
+
+.att-cal .react-calendar__month-view__weekdays__weekday abbr {
+  text-decoration: none;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+/* Overflow chain — critical for tooltips */
+.att-cal .react-calendar__viewContainer,
+.att-cal .react-calendar__month-view,
+.att-cal .react-calendar__month-view__days {
+  overflow: visible !important;
+}
+
+/* Day tiles */
+.att-cal .react-calendar__tile {
+  position: relative;
+  background: none;
+  border: none;
+  padding: 32px 4px 8px;
+  cursor: pointer;
+  border-radius: 12px;
+  overflow: visible !important;
+  z-index: 1;
+  font-family: inherit;
+  transition: background 0.15s;
+  aspect-ratio: unset;
+}
+
+.att-cal .react-calendar__tile:hover {
+  background: rgba(15, 118, 110, 0.05);
+  z-index: 60;
+}
+
+.att-cal .react-calendar__tile--now {
+  background: rgba(15, 118, 110, 0.08) !important;
+  border-radius: 12px;
+}
+
+.att-cal .react-calendar__tile--active,
+.att-cal .react-calendar__tile--active:enabled:hover {
+  background: rgba(8, 145, 178, 0.1) !important;
+  border-radius: 12px;
+  color: inherit;
+}
+
+/* Day number */
+.att-cal .react-calendar__month-view__days__day abbr {
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #475569;
+  pointer-events: none;
+}
+
+/* Neighboring month */
+.att-cal .react-calendar__month-view__days__day--neighboringMonth abbr {
+  color: #cbd5e1 !important;
+}
+
+/* Weekend subtle tint */
+.att-cal .react-calendar__month-view__days__day--weekend abbr {
+  color: #94a3b8;
+}
+
+/* ── Day tile content ────────────────────────────────────────────── */
+.day-tile {
+  position: absolute;
+  bottom: 5px;
+  left: 5px;
+  right: 5px;
+  height: 24px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: filter 0.15s;
+}
+
+.att-cal .react-calendar__tile:hover .day-tile {
+  filter: brightness(0.94);
+}
+
+.tile-present { background: #99f6e4; }
+.tile-halfday { background: #fef08a; }
+.tile-absent  { background: #fecaca; }
+
+.tile-label {
+  font-size: 0.67rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  user-select: none;
+}
+
+.tile-present .tile-label { color: #065f46; }
+.tile-halfday .tile-label { color: #78350f; }
+.tile-absent  .tile-label { color: #7f1d1d; }
+
+/* ── Dark Glass Tooltip ─────────────────────────────────────────── */
+.day-tooltip {
+  position: absolute;
+  bottom: calc(100% + 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(13, 20, 36, 0.92);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 14px;
+  padding: 14px 18px 13px;
+  min-width: 210px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.16s ease, visibility 0.16s ease;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+  z-index: 200;
+}
+
+.att-cal .react-calendar__tile:hover .day-tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+.tt-date {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #5eead4;
+  margin-bottom: 10px;
+  letter-spacing: 0.01em;
+}
+
+.tt-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 5px 16px;
+  align-items: center;
+}
+
+.tt-key {
+  font-size: 0.71rem;
+  color: #94a3b8;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.tt-val {
+  font-size: 0.78rem;
+  color: #f1f5f9;
+  font-weight: 700;
+  text-align: right;
+}
+
+.tt-status {
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 2px 10px;
+  border-radius: 20px;
+  text-align: center;
+  letter-spacing: 0.03em;
+  justify-self: end;
+}
+
+.tt-s-present { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.3); }
+.tt-s-halfday { background: rgba(245, 158, 11, 0.2); color: #fde68a; border: 1px solid rgba(245,158,11,0.3); }
+.tt-s-absent  { background: rgba(239, 68, 68, 0.2);  color: #fca5a5; border: 1px solid rgba(239,68,68,0.3);  }
+
+.tt-arrow {
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 8px solid rgba(13, 20, 36, 0.92);
+}
+
+/* ── Legend ─────────────────────────────────────────────────────── */
+.cal-legend {
+  display: flex;
+  gap: 28px;
+  justify-content: center;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid #e2e8f0;
+  font-size: 0.8rem;
+  color: #475569;
+  font-weight: 500;
+  flex-wrap: wrap;
+}
+
+.legend-item { display: flex; align-items: center; gap: 7px; }
+
+.ldot {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  font-style: normal;
+}
+
+.ld-present { background: #99f6e4; }
+.ld-halfday { background: #fef08a; }
+.ld-absent  { background: #fecaca; }
+
+/* ── Responsive ─────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .dashboard { padding: 16px 12px 40px; }
+  .dash-header { flex-direction: column; align-items: flex-start; padding: 16px 18px; }
+  .header-right { width: 100%; justify-content: space-between; }
+  .stats-row { grid-template-columns: 1fr; gap: 10px; }
+  .stat-card { padding: 16px 18px 14px; display: flex; align-items: center; gap: 14px; text-align: left; }
+  .stat-icon { margin: 0; }
+  .stat-num { font-size: 2rem; }
+  .cal-card { padding: 18px 12px 16px; }
+  .att-cal .react-calendar__tile { padding: 26px 2px 6px; }
+  .day-tooltip { min-width: 175px; font-size: 0.68rem; }
+  .cal-legend { gap: 14px; font-size: 0.75rem; }
+}
+
+@media (max-width: 480px) {
+  .day-tooltip {
+    min-width: 155px;
+    white-space: normal;
+    padding: 10px 13px;
+  }
+  .att-cal .react-calendar__navigation__label__labelText {
+    font-size: 0.9rem;
+  }
+}
