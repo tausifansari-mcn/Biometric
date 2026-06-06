@@ -16,6 +16,42 @@ test('renders the login logo and form', () => {
   render(<App />);
   expect(screen.getByRole('img', { name: /mas logo/i })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /forgot password/i })).toBeInTheDocument();
+});
+
+test('updates an EmployeeDetails password from the forgot-password form', async () => {
+  global.fetch = jest.fn(() => Promise.resolve({
+    ok: true,
+    status: 200,
+    json: () => Promise.resolve({
+      message: 'Password updated successfully. You can now sign in.'
+    })
+  }));
+
+  render(<App />);
+  fireEvent.click(screen.getByRole('button', { name: /forgot password/i }));
+  fireEvent.change(screen.getByLabelText('Employee Code'), {
+    target: { value: 'mas60358' }
+  });
+  fireEvent.change(screen.getByLabelText('New Password'), {
+    target: { value: 'NewSecure123' }
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Save New Password' }));
+
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:8000/api/forgot-password',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          emp_code: 'MAS60358',
+          password: 'NewSecure123'
+        })
+      })
+    );
+  });
+  expect(await screen.findByText(/password updated successfully/i)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
 });
 
 test('does not count Sundays, holidays, or future dates as absent', () => {

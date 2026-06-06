@@ -82,6 +82,8 @@ function App() {
   const tokenProfile = readTokenProfile(token);
   const [empCode, setEmpCode] = useState('');
   const [password, setPassword] = useState('');
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
+  const [authMessage, setAuthMessage] = useState('');
   const [attendance, setAttendance] = useState([]);
   const [holidays, setHolidays] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -244,6 +246,7 @@ function App() {
     event.preventDefault();
     setLoading(true);
     setError('');
+    setAuthMessage('');
     try {
       const response = await fetch(`${API_BASE_URL}/api/login`, {
         method: 'POST',
@@ -274,6 +277,39 @@ function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleForgotPassword = async (event) => {
+    event.preventDefault();
+    setLoading(true);
+    setError('');
+    setAuthMessage('');
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emp_code: empCode, password })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.detail || 'Failed to update password');
+      }
+
+      setForgotPasswordOpen(false);
+      setPassword('');
+      setAuthMessage(data.message || 'Password updated successfully. You can now sign in.');
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleForgotPassword = () => {
+    setForgotPasswordOpen((open) => !open);
+    setPassword('');
+    setError('');
+    setAuthMessage('');
   };
 
   const createHoliday = async (event) => {
@@ -489,9 +525,16 @@ function App() {
           <div className="login-brand">
             <img src="/maslogo.png" alt="MAS Logo" className="logo-img" />
             <h1>Biometric Attendance</h1>
-            <p>Employee Self Service Portal</p>
+            <p>
+              {forgotPasswordOpen
+                ? 'Create a new password for your employee account'
+                : 'Employee Self Service Portal'}
+            </p>
           </div>
-          <form onSubmit={handleLogin} className="login-form">
+          <form
+            onSubmit={forgotPasswordOpen ? handleForgotPassword : handleLogin}
+            className="login-form"
+          >
             <div className="field">
               <label htmlFor="employee-code">Employee Code</label>
               <input
@@ -504,22 +547,33 @@ function App() {
               />
             </div>
             <div className="field">
-              <label htmlFor="password">Password</label>
+              <label htmlFor="password">
+                {forgotPasswordOpen ? 'New Password' : 'Password'}
+              </label>
               <input
                 id="password"
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                placeholder="EmpCode@123"
+                placeholder={forgotPasswordOpen ? 'Minimum 6 characters' : 'EmpCode@123'}
+                minLength={forgotPasswordOpen ? 6 : undefined}
                 required
               />
             </div>
             {error && <div className="form-error">{error}</div>}
+            {authMessage && <div className="form-success">{authMessage}</div>}
             <button type="submit" className="login-btn" disabled={loading}>
-              {loading ? 'Signing in...' : 'Sign In'}
+              {loading
+                ? (forgotPasswordOpen ? 'Saving...' : 'Signing in...')
+                : (forgotPasswordOpen ? 'Save New Password' : 'Sign In')}
+            </button>
+            <button type="button" className="auth-link" onClick={toggleForgotPassword}>
+              {forgotPasswordOpen ? 'Back to Sign In' : 'Forgot Password?'}
             </button>
           </form>
-          <p className="login-hint">Default password: Your EmpCode@123</p>
+          {!forgotPasswordOpen && (
+            <p className="login-hint">Default password: Your EmpCode@123</p>
+          )}
         </div>
       </div>
     );

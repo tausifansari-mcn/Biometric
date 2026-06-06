@@ -1,3 +1,7 @@
+import base64
+import hashlib
+import hmac
+import secrets
 from fastapi import FastAPI, HTTPException, Header, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -23,6 +27,7 @@ app.add_middleware(
 SECRET_KEY = "your-secret-key-change-in-production"
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_HOURS = 8
+PASSWORD_ITERATIONS = 210_000
 
 # ---------- Database Configurations ----------
 
@@ -70,6 +75,10 @@ def get_attendance_connection():
 
 # ---------- Pydantic Models (same as before) ----------
 class LoginRequest(BaseModel):
+    emp_code: str
+    password: str
+
+class ForgotPasswordRequest(BaseModel):
     emp_code: str
     password: str
 
@@ -125,6 +134,41 @@ class AttendanceRecord(BaseModel):
     WorkingMinutes: int
     WorkingHours: str
 
+def hash_password(password: str) -> str:
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt,
+        PASSWORD_ITERATIONS
+    )
+    return "$".join([
+        "pbkdf2_sha256",
+        str(PASSWORD_ITERATIONS),
+        base64.b64encode(salt).decode("ascii"),
+        base64.b64encode(digest).decode("ascii")
+    ])
+
+def verify_password(password: str, stored_password: str) -> bool:
+    if not stored_password:
+        return False
+    if not stored_password.startswith("pbkdf2_sha256$"):
+        return hmac.compare_digest(password, stored_password)
+
+    try:
+        _, iterations, encoded_salt, encoded_digest = stored_password.split("$", 3)
+        salt = base64.b64decode(encoded_salt)
+        expected_digest = base64.b64decode(encoded_digest)
+        actual_digest = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            salt,
+            int(iterations)
+        )
+        return hmac.compare_digest(actual_digest, expected_digest)
+    except (TypeError, ValueError):
+        return False
+
 # ---------- JWT Functions (unchanged) ----------
 def create_access_token(emp_code: str, role: str):
     payload = {
@@ -162,13 +206,18 @@ def root():
 def login(request: LoginRequest):
     """
     Authenticate employee using the MySQL database (EmployeeDetails table).
-    Password rule: emp_code + "@123"
+    Use the saved password when present; otherwise use emp_code + "@123".
     """
+    emp_code = request.emp_code.strip().upper()
     conn = get_mysql_connection()
     cursor = conn.cursor(dictionary=True)
     cursor.execute(
-        "SELECT EmpName, Role, Designation FROM EmployeeDetails WHERE EmpCode = %s",
-        (request.emp_code,)
+        """
+        SELECT EmpName, Role, Designation, Password
+        FROM EmployeeDetails
+        WHERE EmpCode = %s
+        """,
+        (emp_code,)
     )
     row = cursor.fetchone()
     cursor.close()
@@ -178,19 +227,54 @@ def login(request: LoginRequest):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     emp_name, role = row["EmpName"], row["Role"]
     designation = row["Designation"]
-    expected_password = f"{request.emp_code}@123"
-    if request.password != expected_password:
+    saved_password = row.get("Password")
+    password_is_valid = (
+        verify_password(request.password, saved_password)
+        if saved_password
+        else hmac.compare_digest(request.password, f"{emp_code}@123")
+    )
+    if not password_is_valid:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    token = create_access_token(request.emp_code, role)
+    token = create_access_token(emp_code, role)
     return {
         "access_token": token,
         "token_type": "bearer",
-        "emp_code": request.emp_code,
+        "emp_code": emp_code,
         "role": role,
         "name": emp_name,
         "designation": designation
     }
+
+@app.post("/api/forgot-password")
+def forgot_password(request: ForgotPasswordRequest):
+    """Save a new employee password in EmployeeDetails.Password."""
+    emp_code = request.emp_code.strip().upper()
+    if not emp_code:
+        raise HTTPException(status_code=400, detail="Employee code is required")
+    if len(request.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+
+    conn = get_mysql_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "UPDATE EmployeeDetails SET Password = %s WHERE EmpCode = %s",
+            (hash_password(request.password), emp_code)
+        )
+        if cursor.rowcount == 0:
+            conn.rollback()
+            raise HTTPException(status_code=404, detail="Employee code not found")
+        conn.commit()
+        return {"message": "Password updated successfully. You can now sign in."}
+    except HTTPException:
+        raise
+    except MySQLError as error:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=f"Unable to update password: {error}")
+    finally:
+        cursor.close()
+        conn.close()
 
 @app.get("/api/profile", response_model=ProfileOut)
 def get_profile(current_user: dict = Depends(get_current_user)):

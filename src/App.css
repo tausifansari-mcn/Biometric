@@ -87,10 +87,29 @@ html, body {
   transition: transform 0.1s, opacity 0.2s;
 }
 .login-btn:hover { opacity: 0.92; transform: scale(0.98); }
+.auth-link {
+  display: block;
+  margin: 16px auto 0;
+  border: 0;
+  background: transparent;
+  color: #0f766e;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.auth-link:hover { text-decoration: underline; }
 .login-hint { text-align: center; font-size: 0.7rem; color: #94a3b8; margin-top: 24px; }
 .form-error {
   background: #fef2f2;
   color: #dc2626;
+  padding: 10px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  font-size: 0.85rem;
+}
+.form-success {
+  background: #ecfdf5;
+  color: #047857;
   padding: 10px;
   border-radius: 12px;
   margin-bottom: 16px;
