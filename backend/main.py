@@ -559,5 +559,11 @@ def delete_holiday(holiday_id: int, current_user: dict = Depends(get_current_use
     return {"message": "Deleted"}
 
 if __name__ == "__main__":
+    import socket
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as port_check:
+        if port_check.connect_ex(("127.0.0.1", 8000)) == 0:
+            print("Attendance API is already running at http://localhost:8000")
+        else:
+            uvicorn.run(app, host="0.0.0.0", port=8000)
