@@ -18,6 +18,12 @@ app = FastAPI(title="Attendance + Holiday API (Multi-DB)")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
+    allow_origin_regex=(
+        r"^https?://(?:localhost|127\.0\.0\.1|"
+        r"10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|"
+        r"172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2})"
+        r"(?::\d+)?$"
+    ),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -643,11 +649,13 @@ def delete_holiday(holiday_id: int, current_user: dict = Depends(get_current_use
     return {"message": "Deleted"}
 
 if __name__ == "__main__":
-    import socket
     import uvicorn
 
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as port_check:
-        if port_check.connect_ex(("127.0.0.1", 8000)) == 0:
-            print("Attendance API is already running at http://localhost:8000")
-        else:
-            uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        reload_dirs=["backend"],
+        app_dir="backend",
+    )
