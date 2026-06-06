@@ -1,0 +1,123 @@
+<h2>How should the calendar day tooltip look?</h2>
+<p class="subtitle">When you hover over a day, this popup appears. Pick the style you prefer.</p>
+
+<div class="cards">
+
+  <!-- Option A: Dark Glass Card -->
+  <div class="card" data-choice="dark-glass" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#f0fdfa;padding:24px;border-radius:8px;display:flex;justify-content:center;align-items:center;min-height:200px">
+      <!-- Simulated calendar day with tooltip -->
+      <div style="position:relative;display:inline-block">
+        <div style="background:#99f6e4;border-radius:10px;width:52px;height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.12)">
+          <div style="font-size:14px;font-weight:700;color:#065f46">12</div>
+          <div style="font-size:9px;font-weight:700;color:#0f766e;background:#ccfbf1;padding:1px 5px;border-radius:4px;margin-top:2px">P</div>
+        </div>
+        <!-- Tooltip -->
+        <div style="position:absolute;bottom:62px;left:50%;transform:translateX(-50%);background:rgba(15,23,42,0.92);backdrop-filter:blur(8px);color:#fff;padding:12px 16px;border-radius:12px;font-size:12px;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1)">
+          <div style="font-weight:700;color:#99f6e4;margin-bottom:6px;font-size:13px">Monday, 12 June</div>
+          <div style="display:grid;grid-template-columns:auto auto;gap:3px 12px">
+            <span style="color:#94a3b8;font-size:11px">Punch In</span><span style="color:#fff;font-size:11px">09:02 AM</span>
+            <span style="color:#94a3b8;font-size:11px">Punch Out</span><span style="color:#fff;font-size:11px">06:35 PM</span>
+            <span style="color:#94a3b8;font-size:11px">Login Hrs</span><span style="color:#fff;font-size:11px">9:33</span>
+            <span style="color:#94a3b8;font-size:11px">Status</span><span style="color:#10b981;font-weight:700;font-size:11px">Present (P)</span>
+          </div>
+          <!-- Arrow -->
+          <div style="position:absolute;bottom:-7px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:7px solid rgba(15,23,42,0.92)"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Dark Glass Card</h3>
+      <p>Semi-transparent dark background with blur effect. Teal-tinted header text and a clean 2-column grid layout. Very premium and modern feel. Contrasts well against the teal background.</p>
+    </div>
+  </div>
+
+  <!-- Option B: White Card with Color Accent -->
+  <div class="card" data-choice="white-accent" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#f0fdfa;padding:24px;border-radius:8px;display:flex;justify-content:center;align-items:center;min-height:200px">
+      <div style="position:relative;display:inline-block">
+        <div style="background:#fef08a;border-radius:10px;width:52px;height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.12)">
+          <div style="font-size:14px;font-weight:700;color:#854d0e">7</div>
+          <div style="font-size:9px;font-weight:700;color:#92400e;background:#fef3c7;padding:1px 5px;border-radius:4px;margin-top:2px">HD</div>
+        </div>
+        <!-- Tooltip -->
+        <div style="position:absolute;bottom:62px;left:50%;transform:translateX(-50%);background:#fff;color:#1e293b;padding:0;border-radius:14px;font-size:12px;white-space:nowrap;box-shadow:0 10px 30px rgba(0,0,0,0.18);overflow:hidden;min-width:180px">
+          <div style="background:linear-gradient(135deg,#f59e0b,#fbbf24);padding:8px 14px">
+            <div style="font-weight:700;color:#fff;font-size:12px">Tuesday, 7 June</div>
+            <div style="color:rgba(255,255,255,0.85);font-size:10px;margin-top:1px">Half Day</div>
+          </div>
+          <div style="padding:10px 14px">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+              <span style="color:#0891b2;font-size:13px">▶</span>
+              <span style="color:#64748b;font-size:11px">Punch In</span>
+              <span style="font-weight:600;color:#1e293b;font-size:11px;margin-left:auto">09:15 AM</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+              <span style="color:#ef4444;font-size:13px">◼</span>
+              <span style="color:#64748b;font-size:11px">Punch Out</span>
+              <span style="font-weight:600;color:#1e293b;font-size:11px;margin-left:auto">01:20 PM</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+              <span style="color:#8b5cf6;font-size:13px">⏱</span>
+              <span style="color:#64748b;font-size:11px">Login Hrs</span>
+              <span style="font-weight:600;color:#1e293b;font-size:11px;margin-left:auto">4:05</span>
+            </div>
+            <div style="height:1px;background:#f1f5f9;margin:6px 0"></div>
+            <div style="display:flex;justify-content:center">
+              <span style="background:#fef3c7;color:#92400e;font-weight:700;font-size:10px;padding:3px 10px;border-radius:20px">HALF DAY (HD)</span>
+            </div>
+          </div>
+          <div style="position:absolute;bottom:-7px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:7px solid #fff"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — White Card with Color Header (Recommended)</h3>
+      <p>Clean white popup with a colored header matching the day's status (green=P, amber=HD, red=A). Icon-row layout with punch in/out, hours, and a status badge at the bottom. Crisp and easy to read.</p>
+    </div>
+  </div>
+
+  <!-- Option C: Minimal Inline Pill -->
+  <div class="card" data-choice="minimal-pill" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#f0fdfa;padding:24px;border-radius:8px;display:flex;justify-content:center;align-items:center;min-height:200px">
+      <div style="position:relative;display:inline-block">
+        <div style="background:#fecaca;border-radius:10px;width:52px;height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.12)">
+          <div style="font-size:14px;font-weight:700;color:#991b1b">3</div>
+          <div style="font-size:9px;font-weight:700;color:#991b1b;background:#fee2e2;padding:1px 5px;border-radius:4px;margin-top:2px">A</div>
+        </div>
+        <!-- Tooltip -->
+        <div style="position:absolute;bottom:62px;left:50%;transform:translateX(-50%);background:#0f766e;color:#fff;padding:10px 16px;border-radius:30px;font-size:11px;white-space:nowrap;box-shadow:0 6px 18px rgba(15,118,110,0.4)">
+          <div style="display:flex;gap:12px;align-items:center">
+            <div style="text-align:center">
+              <div style="color:#99f6e4;font-size:9px;margin-bottom:2px">IN</div>
+              <div style="font-weight:700">—</div>
+            </div>
+            <div style="width:1px;height:28px;background:rgba(255,255,255,0.25)"></div>
+            <div style="text-align:center">
+              <div style="color:#99f6e4;font-size:9px;margin-bottom:2px">OUT</div>
+              <div style="font-weight:700">—</div>
+            </div>
+            <div style="width:1px;height:28px;background:rgba(255,255,255,0.25)"></div>
+            <div style="text-align:center">
+              <div style="color:#99f6e4;font-size:9px;margin-bottom:2px">HRS</div>
+              <div style="font-weight:700">0:00</div>
+            </div>
+            <div style="width:1px;height:28px;background:rgba(255,255,255,0.25)"></div>
+            <div style="text-align:center">
+              <div style="color:#99f6e4;font-size:9px;margin-bottom:2px">STATUS</div>
+              <div style="background:#ef4444;font-weight:700;font-size:10px;padding:2px 6px;border-radius:10px">ABSENT</div>
+            </div>
+          </div>
+          <div style="position:absolute;bottom:-7px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:7px solid #0f766e"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Teal Pill / Compact Strip</h3>
+      <p>Compact horizontal pill in the brand teal color. Shows all 4 fields (In, Out, Hrs, Status) side-by-side separated by dividers. Very minimal, stays out of the way. Best when calendar cells are small.</p>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:20px;text-align:center">Check <strong>http://localhost:61413</strong> — click your preferred tooltip style, then tell me in the terminal</p>
