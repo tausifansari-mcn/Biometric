@@ -1,6 +1,0 @@
-fastapi
-uvicorn
-pyodbc
-mysql-connector-python
-python-dotenv
-pyjwt

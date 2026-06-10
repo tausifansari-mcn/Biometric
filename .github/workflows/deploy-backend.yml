@@ -1,23 +1,18 @@
-name: Deploy Backend to Railway
+name: Deploy Backend to Render
 
 on:
   push:
     branches: [main]
     paths:
       - 'attendance-frontend/backend/**'
+      - 'Dockerfile'
+      - 'render.yaml'
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli@latest
-
-      - name: Deploy to Railway
-        run: railway up --service backend --detach
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        working-directory: attendance-frontend/backend
+      - name: Trigger Render Deploy Hook
+        run: |
+          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+        # Optional: add a timeout or retry loop here if desired

@@ -1,2 +1,0 @@
-ALTER TABLE EmployeeDetails
-ADD COLUMN Password VARCHAR(255) NULL AFTER EmpCode;

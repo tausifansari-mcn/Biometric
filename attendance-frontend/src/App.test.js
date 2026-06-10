@@ -435,3 +435,141 @@ test('admin can edit holidays and EmployeeDetails rows', async () => {
     );
   });
 });
+
+test('employee can open support and send a query to the assigned manager', async () => {
+  localStorage.setItem('token', 'header.eyJzdWIiOiJNQVMxMDAwMSIsInJvbGUiOiJFbXBsb3llZSJ9.signature');
+  localStorage.setItem('attendanceProfileV2', JSON.stringify({
+    name: 'Employee User',
+    emp_code: 'MAS10001',
+    designation: 'Engineer',
+    role: 'Employee'
+  }));
+
+  global.fetch = jest.fn((url, options = {}) => {
+    if (url.includes('/api/attendance') || url.includes('/api/holidays')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) });
+    }
+    if (url.includes('/api/profile')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          name: 'Employee User',
+          emp_code: 'MAS10001',
+          designation: 'Engineer',
+          role: 'Employee',
+          is_manager: false
+        })
+      });
+    }
+    if (url.endsWith('/api/support-queries') && options.method === 'POST') {
+      return Promise.resolve({
+        ok: true,
+        status: 201,
+        json: () => Promise.resolve({
+          id: 15,
+          employee_emp_code: 'MAS10001',
+          employee_name: 'Employee User',
+          manager_emp_code: 'MAS20001',
+          manager_name: 'Assigned Manager',
+          query_text: 'Please help with my attendance.',
+          status: 'Open',
+          image_name: null,
+          has_image: false,
+          created_at: '2026-06-09T10:00:00',
+          solved_at: null,
+          solved_by: null
+        })
+      });
+    }
+    if (url.endsWith('/api/support-queries')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) });
+    }
+    return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) });
+  });
+
+  render(<App />);
+  await screen.findByTestId('calendar');
+  fireEvent.click(screen.getByRole('button', { name: 'Open profile' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Support / Help' }));
+  fireEvent.change(screen.getByLabelText('Problem or query'), {
+    target: { value: 'Please help with my attendance.' }
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Send to Manager' }));
+
+  expect(await screen.findByText('Query sent to Assigned Manager.')).toBeInTheDocument();
+  const postCall = global.fetch.mock.calls.find(([, options = {}]) => options.method === 'POST');
+  expect(postCall[0]).toBe('http://localhost:8000/api/support-queries');
+  expect(postCall[1].body.get('query_text')).toBe('Please help with my attendance.');
+});
+
+test('manager can open the query bucket and mark an employee query solved', async () => {
+  localStorage.setItem('token', 'header.eyJzdWIiOiJNQVM2MDAwMSIsInJvbGUiOiJNYW5hZ2VyIn0.signature');
+  localStorage.setItem('attendanceProfileV2', JSON.stringify({
+    name: 'Manager User',
+    emp_code: 'MAS60001',
+    designation: 'Operations',
+    role: 'Manager',
+    is_manager: true
+  }));
+
+  const openQuery = {
+    id: 20,
+    employee_emp_code: 'MAS10001',
+    employee_name: 'Employee User',
+    manager_emp_code: 'MAS60001',
+    manager_name: 'Manager User',
+    query_text: 'Please check my missing punch.',
+    status: 'Open',
+    image_name: null,
+    has_image: false,
+    created_at: '2026-06-09T10:00:00',
+    solved_at: null,
+    solved_by: null
+  };
+
+  global.fetch = jest.fn((url, options = {}) => {
+    if (url.includes('/api/attendance') || url.includes('/api/holidays')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) });
+    }
+    if (url.includes('/api/profile')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          name: 'Manager User',
+          emp_code: 'MAS60001',
+          designation: 'Operations',
+          role: 'Manager',
+          is_manager: true
+        })
+      });
+    }
+    if (url.endsWith('/api/manager/support-queries')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([openQuery]) });
+    }
+    if (url.includes('/api/manager/support-queries/20/solve') && options.method === 'PATCH') {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          ...openQuery,
+          status: 'Solved',
+          solved_at: '2026-06-09T11:00:00',
+          solved_by: 'MAS60001'
+        })
+      });
+    }
+    return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) });
+  });
+
+  render(<App />);
+  await screen.findByTestId('calendar');
+  fireEvent.click(screen.getByRole('button', { name: 'Open profile' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Query Bucket' }));
+  expect(await screen.findByText('Please check my missing punch.')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Mark Solved' }));
+
+  expect(await screen.findByText('Query marked as solved.')).toBeInTheDocument();
+  expect(screen.getByText('Solved')).toBeInTheDocument();
+});

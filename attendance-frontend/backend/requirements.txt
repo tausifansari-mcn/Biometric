@@ -4,3 +4,4 @@ pyodbc==5.2.0
 mysql-connector-python==9.1.0
 python-dotenv==1.0.1
 pyjwt==2.10.1
+python-multipart==0.0.20

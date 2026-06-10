@@ -1,0 +1,9 @@
+node_modules
+attendance-frontend/node_modules
+attendance-frontend/build
+.git
+.env
+*.md
+__pycache__
+*.py[cod]
+*.pyo
