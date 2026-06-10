@@ -255,7 +255,7 @@ function App() {
     } finally {
       setLoading(false);
     }
-  }, [handleLogout, selectedMonth, token, searchVersion]);
+  }, [handleLogout, selectedMonth, token]);
 
   const fetchHolidays = useCallback(async () => {
     try {
