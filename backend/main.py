@@ -18,7 +18,11 @@ app = FastAPI(title="Attendance + Holiday API (Multi-DB)")
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "https://biometric-78e6.vercel.app",
+    ],
     allow_origin_regex=(
         r"^https?://(?:localhost|127\.0\.0\.1|"
         r"10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|"

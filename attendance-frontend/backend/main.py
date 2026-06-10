@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel
 import pyodbc
+import pymssql
 import mysql.connector
 from mysql.connector import Error as MySQLError
 from datetime import datetime, timedelta, timezone
@@ -20,14 +21,18 @@ load_dotenv()
 app = FastAPI(title="Attendance + Holiday API (Multi-DB)")
 
 # CORS — comma-separated origins from env, e.g. "https://foo.vercel.app,http://localhost:3000"
-_raw_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000")
-CORS_ALLOWED_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+_default_origins = (
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://biometric-78e6.vercel.app",
+)
+_raw_origins = os.getenv("CORS_ORIGINS", "")
+_configured_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+CORS_ALLOWED_ORIGINS = list(dict.fromkeys((*_default_origins, *_configured_origins)))
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://biometric-78e6.vercel.app"
-    ],
+    allow_origins=CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -50,6 +55,8 @@ ATTENDANCE_CONFIG = {
     'password': os.getenv("SQL_PASSWORD", ""),
     'driver':   os.getenv("SQL_DRIVER",   "{ODBC Driver 17 for SQL Server}"),
 }
+SQL_CONNECTION_MODE = os.getenv("SQL_CONNECTION_MODE", "pymssql").strip().lower()
+SQL_TDS_VERSION = os.getenv("SQL_TDS_VERSION", "7.0")
 
 # 2. Employee/Holiday Database (MySQL)
 EMPLOYEE_CONFIG = {
@@ -70,8 +77,20 @@ def get_mysql_connection():
         print(f"MySQL connection error: {e}")
         raise HTTPException(status_code=500, detail="Employee database connection failed")
 
-# ---------- Helper: SQL Server Connection (unchanged) ----------
+# ---------- Helper: SQL Server Connection ----------
 def get_attendance_connection():
+    if SQL_CONNECTION_MODE == "pymssql":
+        return pymssql.connect(
+            server=ATTENDANCE_CONFIG["server"],
+            port=str(ATTENDANCE_CONFIG["port"]),
+            user=ATTENDANCE_CONFIG["username"],
+            password=ATTENDANCE_CONFIG["password"],
+            database=ATTENDANCE_CONFIG["database"],
+            login_timeout=10,
+            timeout=30,
+            tds_version=SQL_TDS_VERSION,
+        )
+
     conn_str = (
         f"DRIVER={ATTENDANCE_CONFIG['driver']};"
         f"SERVER={ATTENDANCE_CONFIG['server']},{ATTENDANCE_CONFIG['port']};"
@@ -833,7 +852,8 @@ def get_attendance(
             }
 
     # Get attendance from SQL Server
-    placeholders = ','.join('?' * len(target_emp_codes))
+    parameter_marker = "%s" if SQL_CONNECTION_MODE == "pymssql" else "?"
+    placeholders = ','.join([parameter_marker] * len(target_emp_codes))
     query = f"""
         SELECT
             UserID,
@@ -849,8 +869,8 @@ def get_attendance(
             ) AS WorkingHours
         FROM Mx_ATDEventTrn
         WHERE UserID IN ({placeholders})
-          AND Edatetime >= ?
-          AND Edatetime < ?
+          AND Edatetime >= {parameter_marker}
+          AND Edatetime < {parameter_marker}
         GROUP BY UserID, CAST(Edatetime AS DATE)
         ORDER BY UserID, AttendanceDate DESC
     """
@@ -858,7 +878,7 @@ def get_attendance(
         with get_attendance_connection() as conn:
             cursor = conn.cursor()
             params = target_emp_codes + [start_date, end_date + timedelta(days=1)]
-            cursor.execute(query, params)
+            cursor.execute(query, tuple(params))
             rows = cursor.fetchall()
             results = []
             for row in rows:
@@ -877,7 +897,7 @@ def get_attendance(
                     "WorkingHours": row[6]
                 })
         return results
-    except pyodbc.Error as e:
+    except (pyodbc.Error, pymssql.Error) as e:
         raise HTTPException(status_code=500, detail=f"Attendance DB error: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")

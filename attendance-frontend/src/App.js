@@ -343,7 +343,7 @@ function App() {
     fetchAttendance();
     fetchHolidays();
     fetchProfile();
-  }, [fetchAttendance, fetchHolidays, fetchProfile, token]);
+  }, [fetchAttendance, fetchHolidays, fetchProfile, searchVersion, token]);
 
   useEffect(() => {
     if (!token || !showSupportPanel) return undefined;
