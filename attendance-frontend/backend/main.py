@@ -26,7 +26,7 @@ CORS_ALLOWED_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://https://biometric-78e6.vercel.app/"
+        "https://biometric-78e6.vercel.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
