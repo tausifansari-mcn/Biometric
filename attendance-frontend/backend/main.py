@@ -8,8 +8,11 @@ from fastapi import FastAPI, HTTPException, Header, Depends, Query, File, Form, 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel
-import pyodbc
 import pymssql
+try:
+    import pyodbc
+except ImportError:
+    pyodbc = None
 import mysql.connector
 from mysql.connector import Error as MySQLError
 from datetime import datetime, timedelta, timezone
@@ -91,6 +94,8 @@ def get_attendance_connection():
             tds_version=SQL_TDS_VERSION,
         )
 
+    if pyodbc is None:
+        raise RuntimeError("pyodbc is not installed; set SQL_CONNECTION_MODE=pymssql")
     conn_str = (
         f"DRIVER={ATTENDANCE_CONFIG['driver']};"
         f"SERVER={ATTENDANCE_CONFIG['server']},{ATTENDANCE_CONFIG['port']};"
@@ -897,7 +902,7 @@ def get_attendance(
                     "WorkingHours": row[6]
                 })
         return results
-    except (pyodbc.Error, pymssql.Error) as e:
+    except pymssql.Error as e:
         raise HTTPException(status_code=500, detail=f"Attendance DB error: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
