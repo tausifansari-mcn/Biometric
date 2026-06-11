@@ -53,6 +53,18 @@ const saveProfile = (profile) => {
   localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
 };
 
+const getAllowedTasks = (role, isManager = false) => {
+  const normalizedRole = String(role || '').toLowerCase();
+  if (normalizedRole === 'superadmin') {
+    return ['employees', 'managers', 'queries', 'password_resets', 'holidays', 'support'];
+  }
+  if (normalizedRole === 'admin') return ['queries', 'holidays', 'support'];
+  if (normalizedRole === 'manager' || isManager) {
+    return ['queries', 'password_resets', 'support'];
+  }
+  return ['support'];
+};
+
 const getStatus = (minutes) => {
   if (minutes < 270) return { label: 'A', full: 'Absent', cls: 'absent' };
   if (minutes < 540) return { label: 'HD', full: 'Half Day', cls: 'halfday' };
@@ -105,11 +117,12 @@ function App() {
   const [showEmployeePanel, setShowEmployeePanel] = useState(false);
   const [showSupportPanel, setShowSupportPanel] = useState(false);
   const [showManagerQueries, setShowManagerQueries] = useState(false);
-  const [isManager, setIsManager] = useState(
-    Boolean(initialProfile.is_manager || tokenProfile.role?.toLowerCase() === 'manager')
-  );
+  const [activeAdminTask, setActiveAdminTask] = useState(null);
+  const [isManager, setIsManager] = useState(Boolean(initialProfile.is_manager));
   const [supportQueries, setSupportQueries] = useState([]);
   const [managerQueries, setManagerQueries] = useState([]);
+  const [passwordResetRequests, setPasswordResetRequests] = useState([]);
+  const [passwordResetMessage, setPasswordResetMessage] = useState('');
   const [supportText, setSupportText] = useState('');
   const [supportImage, setSupportImage] = useState(null);
   const [supportFileKey, setSupportFileKey] = useState(0);
@@ -132,6 +145,28 @@ function App() {
   });
   const [employeeFormMessage, setEmployeeFormMessage] = useState('');
   const [editingEmployeeId, setEditingEmployeeId] = useState(null);
+  const [employeeIdSearch, setEmployeeIdSearch] = useState('');
+  const [employeeNameSearch, setEmployeeNameSearch] = useState('');
+  const [managers, setManagers] = useState([]);
+  const [newManager, setNewManager] = useState({
+    manager_empcode: '',
+    manager_name: '',
+    process_name: '',
+    manager_unique_code: ''
+  });
+  const [managerFormMessage, setManagerFormMessage] = useState('');
+  const [editingManagerId, setEditingManagerId] = useState(null);
+  const [assignmentManager, setAssignmentManager] = useState(null);
+  const [assignedManagerEmployees, setAssignedManagerEmployees] = useState([]);
+  const [assignmentSearchResults, setAssignmentSearchResults] = useState([]);
+  const [assignmentIdSearch, setAssignmentIdSearch] = useState('');
+  const [assignmentNameSearch, setAssignmentNameSearch] = useState('');
+  const [assignmentBulkCodes, setAssignmentBulkCodes] = useState('');
+  const [selectedAvailableEmployeeIds, setSelectedAvailableEmployeeIds] = useState([]);
+  const [selectedAssignedEmployeeIds, setSelectedAssignedEmployeeIds] = useState([]);
+  const [assignmentMessage, setAssignmentMessage] = useState('');
+  const [assignmentAvailableOffset, setAssignmentAvailableOffset] = useState(0);
+  const [assignmentHasMore, setAssignmentHasMore] = useState(false);
   const [searchEmpCode, setSearchEmpCode] = useState('');
   const [searchEmpName, setSearchEmpName] = useState('');
   const [searchVersion, setSearchVersion] = useState(0);
@@ -156,6 +191,12 @@ function App() {
     return () => document.removeEventListener('mousedown', closeProfileOnOutsideClick);
   }, [profileOpen]);
 
+  useEffect(() => {
+    if (activeAdminTask && !getAllowedTasks(role, isManager).includes(activeAdminTask)) {
+      setActiveAdminTask(null);
+    }
+  }, [activeAdminTask, isManager, role]);
+
   const handleLogout = useCallback(() => {
     localStorage.removeItem('token');
     localStorage.removeItem(PROFILE_STORAGE_KEY);
@@ -172,14 +213,39 @@ function App() {
     setShowEmployeePanel(false);
     setShowSupportPanel(false);
     setShowManagerQueries(false);
+    setActiveAdminTask(null);
     setIsManager(false);
     setSupportQueries([]);
     setManagerQueries([]);
+    setPasswordResetRequests([]);
+    setPasswordResetMessage('');
     setSupportText('');
     setSupportImage(null);
     setSupportMessage('');
     setEmployeeFormMessage('');
     setEditingEmployeeId(null);
+    setEmployeeIdSearch('');
+    setEmployeeNameSearch('');
+    setManagers([]);
+    setNewManager({
+      manager_empcode: '',
+      manager_name: '',
+      process_name: '',
+      manager_unique_code: ''
+    });
+    setManagerFormMessage('');
+    setEditingManagerId(null);
+    setAssignmentManager(null);
+    setAssignedManagerEmployees([]);
+    setAssignmentSearchResults([]);
+    setAssignmentIdSearch('');
+    setAssignmentNameSearch('');
+    setAssignmentBulkCodes('');
+    setSelectedAvailableEmployeeIds([]);
+    setSelectedAssignedEmployeeIds([]);
+    setAssignmentMessage('');
+    setAssignmentAvailableOffset(0);
+    setAssignmentHasMore(false);
     setEditingHolidayId(null);
     setSearchEmpCode('');
     setSearchEmpName('');
@@ -304,6 +370,73 @@ function App() {
     }
   }, [token]);
 
+  const fetchManagers = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/managers`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await response.json().catch(() => ([]));
+      if (!response.ok) throw new Error(data.detail || 'Failed to load managers');
+      setManagers(Array.isArray(data) ? data : []);
+    } catch (requestError) {
+      setManagerFormMessage(requestError.message);
+    }
+  }, [token]);
+
+  const fetchAssignedEmployees = useCallback(async (
+    managerId,
+    idSearch = '',
+    nameSearch = ''
+  ) => {
+    try {
+      const params = new URLSearchParams({ assigned_only: 'true' });
+      if (idSearch.trim()) params.set('search_id', idSearch.trim());
+      if (nameSearch.trim()) params.set('search_name', nameSearch.trim());
+      const response = await fetch(
+        `${API_BASE_URL}/api/managers/${managerId}/assignment-employees?${params}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const data = await response.json().catch(() => ([]));
+      if (!response.ok) throw new Error(data.detail || 'Failed to load employee assignments');
+      setAssignedManagerEmployees(Array.isArray(data) ? data : []);
+    } catch (requestError) {
+      setAssignmentMessage(requestError.message);
+    }
+  }, [token]);
+
+  const fetchAvailableEmployees = useCallback(async (
+    managerId,
+    idSearch = '',
+    nameSearch = '',
+    offset = 0,
+    append = false,
+    bulkCodes = ''
+  ) => {
+    try {
+      const params = new URLSearchParams({
+        limit: '100',
+        offset: String(offset)
+      });
+      if (idSearch.trim()) params.set('search_id', idSearch.trim());
+      if (nameSearch.trim()) params.set('search_name', nameSearch.trim());
+      if (bulkCodes.trim()) params.set('emp_codes', bulkCodes.trim());
+      const response = await fetch(
+        `${API_BASE_URL}/api/managers/${managerId}/assignment-employees?${params}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const data = await response.json().catch(() => ([]));
+      if (!response.ok) throw new Error(data.detail || 'Failed to load available employees');
+      const rows = Array.isArray(data) ? data : [];
+      setAssignmentSearchResults((currentRows) => (
+        append ? [...currentRows, ...rows] : rows
+      ));
+      setAssignmentAvailableOffset(offset + rows.length);
+      setAssignmentHasMore(rows.length === 100);
+    } catch (requestError) {
+      setAssignmentMessage(requestError.message);
+    }
+  }, [token]);
+
   const fetchSupportQueries = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/support-queries`, {
@@ -338,6 +471,25 @@ function App() {
     }
   }, [handleLogout, token]);
 
+  const fetchPasswordResetRequests = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/manager/password-reset-requests`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.status === 401) {
+        handleLogout();
+        return;
+      }
+      const data = await response.json().catch(() => ([]));
+      if (!response.ok) {
+        throw new Error(data.detail || 'Failed to load password reset requests');
+      }
+      setPasswordResetRequests(Array.isArray(data) ? data : []);
+    } catch (requestError) {
+      setPasswordResetMessage(requestError.message);
+    }
+  }, [handleLogout, token]);
+
   useEffect(() => {
     if (!token) return;
     fetchAttendance();
@@ -346,11 +498,11 @@ function App() {
   }, [fetchAttendance, fetchHolidays, fetchProfile, searchVersion, token]);
 
   useEffect(() => {
-    if (!token || !showSupportPanel) return undefined;
+    if (!token || (!showSupportPanel && activeAdminTask !== 'support')) return undefined;
     fetchSupportQueries();
     const refreshTimer = window.setInterval(fetchSupportQueries, 15000);
     return () => window.clearInterval(refreshTimer);
-  }, [fetchSupportQueries, showSupportPanel, token]);
+  }, [activeAdminTask, fetchSupportQueries, showSupportPanel, token]);
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -403,12 +555,15 @@ function App() {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.detail || 'Failed to update password');
+        throw new Error(data.detail || 'Failed to request password reset');
       }
 
       setForgotPasswordOpen(false);
       setPassword('');
-      setAuthMessage(data.message || 'Password updated successfully. You can now sign in.');
+      setAuthMessage(
+        data.message
+        || 'Password reset request sent. You can use the new password after manager approval.'
+      );
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -541,6 +696,248 @@ function App() {
     setEmployeeFormMessage('');
   };
 
+  const saveManager = async (event) => {
+    event.preventDefault();
+    setManagerFormMessage('');
+
+    try {
+      const response = await fetch(
+        editingManagerId
+          ? `${API_BASE_URL}/api/managers/${editingManagerId}`
+          : `${API_BASE_URL}/api/managers`,
+        {
+        method: editingManagerId ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(newManager)
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || 'Failed to save manager');
+
+      setManagerFormMessage(
+        `Manager ${data.manager_empcode} ${editingManagerId ? 'updated' : 'added'} successfully with ID ${data.id}.`
+      );
+      setNewManager({
+        manager_empcode: '',
+        manager_name: '',
+        process_name: '',
+        manager_unique_code: ''
+      });
+      setEditingManagerId(null);
+      fetchManagers();
+    } catch (requestError) {
+      setManagerFormMessage(requestError.message);
+    }
+  };
+
+  const updateNewManager = (field, value) => {
+    setNewManager((current) => ({ ...current, [field]: value }));
+  };
+
+  const editManager = (manager) => {
+    setEditingManagerId(manager.id);
+    setNewManager({
+      manager_empcode: manager.manager_empcode,
+      manager_name: manager.manager_name,
+      process_name: manager.process_name,
+      manager_unique_code: manager.manager_unique_code
+    });
+    setManagerFormMessage('');
+  };
+
+  const cancelManagerEdit = () => {
+    setEditingManagerId(null);
+    setNewManager({
+      manager_empcode: '',
+      manager_name: '',
+      process_name: '',
+      manager_unique_code: ''
+    });
+    setManagerFormMessage('');
+  };
+
+  const deleteManager = async (manager) => {
+    if (!window.confirm(`Delete manager ${manager.manager_name}?`)) return;
+
+    setManagerFormMessage('');
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/managers/${manager.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || 'Failed to delete manager');
+
+      if (editingManagerId === manager.id) cancelManagerEdit();
+      setManagers((currentManagers) => (
+        currentManagers.filter((currentManager) => currentManager.id !== manager.id)
+      ));
+      setManagerFormMessage(`Manager ${manager.manager_empcode} deleted successfully.`);
+    } catch (requestError) {
+      setManagerFormMessage(requestError.message);
+    }
+  };
+
+  const openEmployeeAssignment = (manager) => {
+    setAssignmentManager(manager);
+    setAssignedManagerEmployees([]);
+    setAssignmentSearchResults([]);
+    setAssignmentIdSearch('');
+    setAssignmentNameSearch('');
+    setAssignmentBulkCodes('');
+    setSelectedAvailableEmployeeIds([]);
+    setSelectedAssignedEmployeeIds([]);
+    setAssignmentMessage('');
+    setAssignmentAvailableOffset(0);
+    setAssignmentHasMore(false);
+    fetchAssignedEmployees(manager.id);
+    fetchAvailableEmployees(manager.id);
+  };
+
+  const closeEmployeeAssignment = () => {
+    setAssignmentManager(null);
+    setAssignedManagerEmployees([]);
+    setAssignmentSearchResults([]);
+    setAssignmentBulkCodes('');
+    setSelectedAvailableEmployeeIds([]);
+    setSelectedAssignedEmployeeIds([]);
+    setAssignmentMessage('');
+    setAssignmentAvailableOffset(0);
+    setAssignmentHasMore(false);
+  };
+
+  const searchAssignmentEmployees = async (preserveMessage = false) => {
+    if (!assignmentManager) return;
+    const idSearch = assignmentIdSearch.trim();
+    const nameSearch = assignmentNameSearch.trim();
+    if (!preserveMessage) setAssignmentMessage('');
+    try {
+      await fetchAvailableEmployees(
+        assignmentManager.id,
+        idSearch,
+        nameSearch,
+        0,
+        false
+      );
+      setSelectedAvailableEmployeeIds([]);
+      await fetchAssignedEmployees(assignmentManager.id, idSearch, nameSearch);
+      setSelectedAssignedEmployeeIds([]);
+    } catch (requestError) {
+      setAssignmentMessage(requestError.message);
+    }
+  };
+
+  const searchAssignmentBulkCodes = async () => {
+    if (!assignmentManager) return;
+    const codes = [...new Set(
+      assignmentBulkCodes
+        .split(',')
+        .map((code) => code.trim().toUpperCase())
+        .filter(Boolean)
+    )];
+    if (codes.length === 0) {
+      setAssignmentMessage('Paste at least one employee code.');
+      return;
+    }
+    if (codes.length > 100) {
+      setAssignmentMessage('You can search a maximum of 100 employee codes at once.');
+      return;
+    }
+
+    const normalizedCodes = codes.join(',');
+    setAssignmentBulkCodes(normalizedCodes);
+    setAssignmentIdSearch('');
+    setAssignmentNameSearch('');
+    setAssignmentMessage('');
+    setSelectedAvailableEmployeeIds([]);
+    setSelectedAssignedEmployeeIds([]);
+    await fetchAvailableEmployees(
+      assignmentManager.id,
+      '',
+      '',
+      0,
+      false,
+      normalizedCodes
+    );
+  };
+
+  const toggleEmployeeSelection = (employeeId, assigned) => {
+    const setter = assigned ? setSelectedAssignedEmployeeIds : setSelectedAvailableEmployeeIds;
+    setter((currentIds) => (
+      currentIds.includes(employeeId)
+        ? currentIds.filter((id) => id !== employeeId)
+        : [...currentIds, employeeId]
+    ));
+  };
+
+  const updateEmployeeAssignments = async (action) => {
+    if (!assignmentManager) return;
+    const employeeIds = action === 'assign'
+      ? selectedAvailableEmployeeIds
+      : selectedAssignedEmployeeIds;
+    if (employeeIds.length === 0) return;
+
+    const sourceEmployees = action === 'assign'
+      ? assignmentSearchResults
+      : assignedManagerEmployees;
+    const selectedEmployees = sourceEmployees.filter((employee) => employeeIds.includes(employee.id));
+    const movingEmployees = action === 'assign' && selectedEmployees.some((employee) => (
+      employee.assigned_manager_unique_code
+      && employee.assigned_manager_unique_code !== assignmentManager.manager_unique_code
+    ));
+    if (
+      movingEmployees
+      && !window.confirm('Some selected employees already have a manager. Move them to this manager?')
+    ) {
+      return;
+    }
+
+    setAssignmentMessage('');
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/managers/${assignmentManager.id}/${action}-employees`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ employee_ids: employeeIds })
+        }
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || 'Failed to update assignments');
+
+      setAssignmentMessage(data.message || 'Employee assignments updated.');
+      setSelectedAvailableEmployeeIds([]);
+      setSelectedAssignedEmployeeIds([]);
+      await fetchAssignedEmployees(
+        assignmentManager.id,
+        assignmentIdSearch,
+        assignmentNameSearch
+      );
+      await fetchManagers();
+      if (assignmentIdSearch.trim() || assignmentNameSearch.trim()) {
+        await searchAssignmentEmployees(true);
+      } else if (assignmentBulkCodes.trim()) {
+        await fetchAvailableEmployees(
+          assignmentManager.id,
+          '',
+          '',
+          0,
+          false,
+          assignmentBulkCodes
+        );
+      } else {
+        await fetchAvailableEmployees(assignmentManager.id);
+      }
+    } catch (requestError) {
+      setAssignmentMessage(requestError.message);
+    }
+  };
+
   const sendSupportQuery = async (event) => {
     event.preventDefault();
     if (!supportText.trim()) return;
@@ -592,6 +989,38 @@ function App() {
     }
   };
 
+  const reviewPasswordReset = async (requestId, action) => {
+    const actionLabel = action === 'approve' ? 'approve' : 'reject';
+    if (!window.confirm(`${actionLabel[0].toUpperCase()}${actionLabel.slice(1)} this password reset request?`)) {
+      return;
+    }
+
+    setPasswordResetMessage('');
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/manager/password-reset-requests/${requestId}/${action}`,
+        {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.detail || `Failed to ${actionLabel} password reset request`);
+      }
+      setPasswordResetRequests((requests) => (
+        requests.map((request) => (request.id === requestId ? data : request))
+      ));
+      setPasswordResetMessage(
+        action === 'approve'
+          ? 'Password reset approved. The employee can now use the new password.'
+          : 'Password reset request rejected.'
+      );
+    } catch (requestError) {
+      setPasswordResetMessage(requestError.message);
+    }
+  };
+
   const openSupportImage = async (queryId) => {
     const imageWindow = window.open('', '_blank');
     try {
@@ -611,6 +1040,33 @@ function App() {
       if (imageWindow) imageWindow.close();
       setSupportMessage(requestError.message);
     }
+  };
+
+  const openTask = (task) => {
+    if (!getAllowedTasks(role, isManager).includes(task)) return;
+
+    setActiveAdminTask(task);
+    setProfileOpen(false);
+    setShowSupportPanel(false);
+    setShowManagerQueries(false);
+    setShowHolidayPanel(false);
+    setShowEmployeePanel(false);
+    setSupportMessage('');
+    setPasswordResetMessage('');
+
+    if (task === 'employees') fetchEmployees();
+    if (task === 'managers') fetchManagers();
+    if (task === 'queries') fetchManagerQueries();
+    if (task === 'password_resets') fetchPasswordResetRequests();
+  };
+
+  const closeTasks = () => {
+    setActiveAdminTask(null);
+    setSupportMessage('');
+    setPasswordResetMessage('');
+    setEditingEmployeeId(null);
+    setEditingHolidayId(null);
+    closeEmployeeAssignment();
   };
 
   const attendanceByDate = {};
@@ -710,7 +1166,7 @@ function App() {
             <h1>Biometric Attendance</h1>
             <p>
               {forgotPasswordOpen
-                ? 'Create a new password for your employee account'
+                ? 'Request a new password from your assigned manager'
                 : 'Employee Self Service Portal'}
             </p>
           </div>
@@ -747,8 +1203,8 @@ function App() {
             {authMessage && <div className="form-success">{authMessage}</div>}
             <button type="submit" className="login-btn" disabled={loading}>
               {loading
-                ? (forgotPasswordOpen ? 'Saving...' : 'Signing in...')
-                : (forgotPasswordOpen ? 'Save New Password' : 'Sign In')}
+                ? (forgotPasswordOpen ? 'Sending Request...' : 'Signing in...')
+                : (forgotPasswordOpen ? 'Send Reset Request' : 'Sign In')}
             </button>
             <button type="button" className="auth-link" onClick={toggleForgotPassword}>
               {forgotPasswordOpen ? 'Back to Sign In' : 'Forgot Password?'}
@@ -764,12 +1220,24 @@ function App() {
 
   const [year, month] = selectedMonth.split('-').map(Number);
   const summary = buildSummary(year, month, attendanceByDate, holidayByDate, today);
-  const isAdmin = role.toLowerCase() === 'admin' || role.toLowerCase() === 'superadmin';
   const isSuperAdmin = role.toLowerCase() === 'superadmin';
-  const canManageQueries = isManager || role.toLowerCase() === 'manager';
+  const allowedTasks = getAllowedTasks(role, isManager);
+  const hasEmployeeSearch = Boolean(employeeIdSearch.trim() || employeeNameSearch.trim());
+  const filteredEmployees = employees.filter((employee) => {
+    const idSearch = employeeIdSearch.trim().toLowerCase();
+    const nameSearch = employeeNameSearch.trim().toLowerCase();
+    const matchesId = !idSearch
+      || String(employee.id).toLowerCase().includes(idSearch)
+      || String(employee.emp_code || '').toLowerCase().includes(idSearch);
+    const matchesName = !nameSearch
+      || String(employee.emp_name || '').toLowerCase().includes(nameSearch);
+    return matchesId && matchesName;
+  });
+  const assignedEmployees = assignedManagerEmployees;
+  const availableAssignmentEmployees = assignmentSearchResults;
 
   return (
-    <div className="dashboard">
+    <div className={`dashboard ${activeAdminTask ? 'admin-page-open' : ''}`}>
       <header className="dash-header">
         <div className="header-left">
           <img src="/maslogo.png" alt="MAS Logo" className="header-logo" />
@@ -813,71 +1281,133 @@ function App() {
             <div className="profile-row"><span>Emp Code</span><strong>{employeeCode}</strong></div>
             <div className="profile-row"><span>Designation</span><strong>{designation}</strong></div>
             <div className="profile-row"><span>Role</span><strong>{role || 'Employee'}</strong></div>
-            <div className="profile-actions">
-              <button
-                className="profile-action profile-action-support"
-                type="button"
-                onClick={() => {
-                  setShowSupportPanel((visible) => !visible);
-                  setShowManagerQueries(false);
-                  setShowHolidayPanel(false);
-                  setShowEmployeePanel(false);
-                  setProfileOpen(false);
-                  setSupportMessage('');
-                }}
-              >
-                {showSupportPanel ? 'Hide Support' : 'Support / Help'}
-              </button>
-              {canManageQueries && (
-                <button
-                  className="profile-action profile-action-manager"
-                  type="button"
-                  onClick={() => {
-                    setShowManagerQueries((visible) => !visible);
-                    setShowSupportPanel(false);
-                    setShowHolidayPanel(false);
-                    setShowEmployeePanel(false);
-                    setProfileOpen(false);
-                    setSupportMessage('');
-                    fetchManagerQueries();
-                  }}
-                >
-                  {showManagerQueries ? 'Hide Query Bucket' : 'Query Bucket'}
-                </button>
-              )}
-            </div>
-            {isAdmin && (
-              <div className="profile-actions">
-                <button
-                  className="profile-action"
-                  type="button"
-                  onClick={() => {
-                    setShowHolidayPanel((visible) => !visible);
-                    setShowEmployeePanel(false);
-                    setProfileOpen(false);
-                  }}
-                >
-                  {showHolidayPanel ? 'Hide Holiday Panel' : 'Add Holiday'}
-                </button>
+            <div className="profile-actions task-profile-actions">
+              {allowedTasks.includes('employees') && (
                 <button
                   className="profile-action profile-action-secondary"
                   type="button"
-                  onClick={() => {
-                    setShowEmployeePanel((visible) => !visible);
-                    setShowHolidayPanel(false);
-                    setProfileOpen(false);
-                    fetchEmployees();
-                  }}
+                  onClick={() => openTask('employees')}
                 >
-                  {showEmployeePanel ? 'Hide Employees' : 'Manage Employees'}
+                  Manage Employee
                 </button>
-              </div>
-            )}
+              )}
+              {allowedTasks.includes('managers') && (
+                <button
+                  className="profile-action profile-action-manager-add"
+                  type="button"
+                  onClick={() => openTask('managers')}
+                >
+                  Add Manager
+                </button>
+              )}
+              {allowedTasks.includes('queries') && (
+                <button
+                  className="profile-action profile-action-manager"
+                  type="button"
+                  onClick={() => openTask('queries')}
+                >
+                  Query Bucket
+                </button>
+              )}
+              {allowedTasks.includes('password_resets') && (
+                <button
+                  className="profile-action profile-action-password-reset"
+                  type="button"
+                  onClick={() => openTask('password_resets')}
+                >
+                  Reset Password Requests
+                </button>
+              )}
+              {allowedTasks.includes('holidays') && (
+                <button
+                  className="profile-action"
+                  type="button"
+                  onClick={() => openTask('holidays')}
+                >
+                  Add Holiday
+                </button>
+              )}
+              {allowedTasks.includes('support') && (
+                <button
+                  className="profile-action profile-action-support"
+                  type="button"
+                  onClick={() => openTask('support')}
+                >
+                  Support
+                </button>
+              )}
+            </div>
           </div>
         )}
       </header>
 
-      {isSuperAdmin && (
+      {activeAdminTask && (
+        <aside className="admin-task-nav" aria-label="Profile tasks">
+          <div className="admin-task-nav-head">
+            <span>{role || 'Employee'}</span>
+            <strong>Task Center</strong>
+          </div>
+          {allowedTasks.includes('employees') && (
+            <button
+              type="button"
+              className={activeAdminTask === 'employees' ? 'active' : ''}
+              onClick={() => openTask('employees')}
+            >
+              <span>1</span> Manage Employee
+            </button>
+          )}
+          {allowedTasks.includes('managers') && (
+            <button
+              type="button"
+              className={activeAdminTask === 'managers' ? 'active' : ''}
+              onClick={() => openTask('managers')}
+            >
+              <span>2</span> Add Manager
+            </button>
+          )}
+          {allowedTasks.includes('queries') && (
+            <button
+              type="button"
+              className={activeAdminTask === 'queries' ? 'active' : ''}
+              onClick={() => openTask('queries')}
+            >
+              <span>{isSuperAdmin ? '3' : '1'}</span> Query Bucket
+            </button>
+          )}
+          {allowedTasks.includes('password_resets') && (
+            <button
+              type="button"
+              className={activeAdminTask === 'password_resets' ? 'active' : ''}
+              onClick={() => openTask('password_resets')}
+            >
+              <span>{isSuperAdmin ? '4' : '2'}</span> Reset Password Requests
+            </button>
+          )}
+          {allowedTasks.includes('holidays') && (
+            <button
+              type="button"
+              className={activeAdminTask === 'holidays' ? 'active' : ''}
+              onClick={() => openTask('holidays')}
+            >
+              <span>{isSuperAdmin ? '5' : '2'}</span> Add Holiday
+            </button>
+          )}
+          {allowedTasks.includes('support') && (
+            <button
+              type="button"
+              className={activeAdminTask === 'support' ? 'active' : ''}
+              onClick={() => openTask('support')}
+            >
+              <span>{isSuperAdmin ? '6' : allowedTasks.length}</span> Support
+            </button>
+          )}
+          <button type="button" className="back-dashboard-btn" onClick={closeTasks}>
+            Back to Attendance
+          </button>
+        </aside>
+      )}
+
+      {isSuperAdmin && !activeAdminTask && (
         <div className="search-row" style={{ display: 'flex', gap: '10px', padding: '10px 20px', alignItems: 'center', background: '#fff', borderBottom: '1px solid #eee', flexWrap: 'wrap' }}>
           <input
             type="text"
@@ -919,7 +1449,7 @@ function App() {
         </div>
       )}
 
-      {showSupportPanel && (
+      {(showSupportPanel || activeAdminTask === 'support') && (
         <section className="support-panel">
           <div className="panel-heading">
             <div>
@@ -981,11 +1511,11 @@ function App() {
         </section>
       )}
 
-      {canManageQueries && showManagerQueries && (
+      {(showManagerQueries || activeAdminTask === 'queries') && (
         <section className="support-panel manager-query-panel">
           <div className="panel-heading">
             <div>
-              <span className="panel-kicker">Manager Portal</span>
+              <span className="panel-kicker">Query Management</span>
               <h3>Employee Query Bucket</h3>
             </div>
             <span className="support-note">
@@ -1005,6 +1535,7 @@ function App() {
                 <p>{query.query_text}</p>
                 <div className="query-meta">
                   <span>Received {formatDateTime(query.created_at)}</span>
+                  <span>Manager: {query.manager_name}</span>
                   {query.has_image && (
                     <button type="button" onClick={() => openSupportImage(query.id)}>
                       View image
@@ -1024,19 +1555,398 @@ function App() {
               </article>
             ))}
             {managerQueries.length === 0 && (
-              <div className="empty-list">No employee queries assigned to you.</div>
+              <div className="empty-list">No employee queries found.</div>
             )}
           </div>
         </section>
       )}
 
-      <div className="stats-row">
-        <div className="stat-card"><div className="stat-icon si-present">P</div><div className="stat-num sn-present">{summary.present}</div><div className="stat-lbl">Present</div><div className="stat-bar sb-present" /></div>
-        <div className="stat-card"><div className="stat-icon si-halfday">HD</div><div className="stat-num sn-halfday">{summary.halfDay}</div><div className="stat-lbl">Half Day</div><div className="stat-bar sb-halfday" /></div>
-        <div className="stat-card"><div className="stat-icon si-absent">A</div><div className="stat-num sn-absent">{summary.absent}</div><div className="stat-lbl">Absent / Short</div><div className="stat-bar sb-absent" /></div>
-      </div>
+      {activeAdminTask === 'password_resets' && (
+        <section className="support-panel password-reset-panel">
+          <div className="panel-heading">
+            <div>
+              <span className="panel-kicker">Account Security</span>
+              <h3>Reset Password Requests</h3>
+            </div>
+            <span className="support-note">
+              {passwordResetRequests.filter((request) => request.status === 'Pending').length} pending
+            </span>
+          </div>
+          {passwordResetMessage && (
+            <div className="support-message" role="status">{passwordResetMessage}</div>
+          )}
+          <div className="query-list">
+            {passwordResetRequests.map((request) => (
+              <article className="query-card password-reset-card" key={request.id}>
+                <div className="query-card-head">
+                  <strong>
+                    {request.employee_name} ({request.employee_emp_code})
+                  </strong>
+                  <span className={`query-status status-${request.status.toLowerCase()}`}>
+                    {request.status}
+                  </span>
+                </div>
+                <p>
+                  Requested a new login password. The password remains inactive until approved.
+                </p>
+                <div className="query-meta">
+                  <span>Requested {formatDateTime(request.created_at)}</span>
+                  <span>Manager: {request.manager_name}</span>
+                  {request.status === 'Pending' && (
+                    <>
+                      <button
+                        type="button"
+                        className="approve-reset-btn"
+                        onClick={() => reviewPasswordReset(request.id, 'approve')}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        className="reject-reset-btn"
+                        onClick={() => reviewPasswordReset(request.id, 'reject')}
+                      >
+                        Reject
+                      </button>
+                    </>
+                  )}
+                  {request.reviewed_at && (
+                    <span>
+                      Reviewed {formatDateTime(request.reviewed_at)} by {request.reviewed_by}
+                    </span>
+                  )}
+                </div>
+              </article>
+            ))}
+            {passwordResetRequests.length === 0 && (
+              <div className="empty-list">No password reset requests found.</div>
+            )}
+          </div>
+        </section>
+      )}
 
-      {isAdmin && showHolidayPanel && (
+      {!activeAdminTask && (
+        <div className="stats-row">
+          <div className="stat-card"><div className="stat-icon si-present">P</div><div className="stat-num sn-present">{summary.present}</div><div className="stat-lbl">Present</div><div className="stat-bar sb-present" /></div>
+          <div className="stat-card"><div className="stat-icon si-halfday">HD</div><div className="stat-num sn-halfday">{summary.halfDay}</div><div className="stat-lbl">Half Day</div><div className="stat-bar sb-halfday" /></div>
+          <div className="stat-card"><div className="stat-icon si-absent">A</div><div className="stat-num sn-absent">{summary.absent}</div><div className="stat-lbl">Absent / Short</div><div className="stat-bar sb-absent" /></div>
+        </div>
+      )}
+
+      {activeAdminTask === 'managers' && (
+        <section className="admin-panel manager-panel">
+          <div className="panel-heading">
+            <div>
+              <span className="panel-kicker">SuperAdmin Administration</span>
+              <h3>{editingManagerId ? 'Edit Manager' : 'Add Manager'}</h3>
+            </div>
+            <span className="auto-id-note">ID: Auto generated</span>
+          </div>
+          <form onSubmit={saveManager} className="employee-form manager-form">
+            <label>
+              <span>Manager_empcode</span>
+              <input
+                type="text"
+                value={newManager.manager_empcode}
+                onChange={(event) => (
+                  updateNewManager('manager_empcode', event.target.value.toUpperCase())
+                )}
+                required
+              />
+            </label>
+            <label>
+              <span>Manager_Name</span>
+              <input
+                type="text"
+                value={newManager.manager_name}
+                onChange={(event) => updateNewManager('manager_name', event.target.value)}
+                required
+              />
+            </label>
+            <label>
+              <span>Process_name</span>
+              <input
+                type="text"
+                value={newManager.process_name}
+                onChange={(event) => updateNewManager('process_name', event.target.value)}
+                required
+              />
+            </label>
+            <label>
+              <span>managar_unique_code</span>
+              <input
+                type="text"
+                value={newManager.manager_unique_code}
+                onChange={(event) => (
+                  updateNewManager('manager_unique_code', event.target.value.toUpperCase())
+                )}
+                required
+              />
+            </label>
+            <button type="submit">{editingManagerId ? 'Update Manager' : 'Add Manager'}</button>
+            {editingManagerId && (
+              <button type="button" className="cancel-btn" onClick={cancelManagerEdit}>
+                Cancel
+              </button>
+            )}
+          </form>
+          {managerFormMessage && (
+            <div className="employee-form-message" role="status">{managerFormMessage}</div>
+          )}
+          <div className="manager-list">
+            <div className="manager-list-head">
+              <span>ID</span>
+              <span>Manager Emp Code</span>
+              <span>Manager Name</span>
+              <span>Process</span>
+              <span>Unique Code</span>
+              <span>Employees</span>
+              <span>Actions</span>
+            </div>
+            {managers.map((manager) => (
+              <div className="manager-list-row" key={manager.id}>
+                <span>{manager.id}</span>
+                <strong>{manager.manager_empcode}</strong>
+                <span>{manager.manager_name}</span>
+                <span>{manager.process_name}</span>
+                <span>{manager.manager_unique_code}</span>
+                <span>{manager.assigned_employee_count || 0}</span>
+                <div className="list-actions">
+                  <button type="button" className="edit-btn" onClick={() => editManager(manager)}>
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="assign-manager-btn"
+                    onClick={() => openEmployeeAssignment(manager)}
+                  >
+                    Assign Employees
+                  </button>
+                  <button
+                    type="button"
+                    className="delete-manager-btn"
+                    onClick={() => deleteManager(manager)}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+            {managers.length === 0 && (
+              <div className="empty-list">No managers found.</div>
+            )}
+          </div>
+          {assignmentManager && (
+            <section className="assignment-panel">
+              <div className="panel-heading">
+                <div>
+                  <span className="panel-kicker">Employee Assignment</span>
+                  <h3>{assignmentManager.manager_name}</h3>
+                </div>
+                <button
+                  type="button"
+                  className="assignment-close-btn"
+                  onClick={closeEmployeeAssignment}
+                >
+                  Close
+                </button>
+              </div>
+              <div className="assignment-manager-meta">
+                <span>{assignmentManager.manager_empcode}</span>
+                <span>{assignmentManager.process_name}</span>
+                <span>{assignmentManager.manager_unique_code}</span>
+              </div>
+              {assignmentMessage && (
+                <div className="employee-form-message" role="status">{assignmentMessage}</div>
+              )}
+              <div className="employee-search assignment-search">
+                <label>
+                  <span>Search by ID</span>
+                  <input
+                    type="search"
+                    value={assignmentIdSearch}
+                    onChange={(event) => setAssignmentIdSearch(event.target.value)}
+                    placeholder="Employee ID or code"
+                  />
+                </label>
+                <label>
+                  <span>Search by Name</span>
+                  <input
+                    type="search"
+                    value={assignmentNameSearch}
+                    onChange={(event) => setAssignmentNameSearch(event.target.value)}
+                    placeholder="Employee name"
+                  />
+                </label>
+                <div className="assignment-search-actions">
+                  <button
+                    type="button"
+                    className="assignment-search-btn"
+                    onClick={() => searchAssignmentEmployees()}
+                  >
+                    Search
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAssignmentIdSearch('');
+                    setAssignmentNameSearch('');
+                    setAssignmentSearchResults([]);
+                    setSelectedAvailableEmployeeIds([]);
+                    setSelectedAssignedEmployeeIds([]);
+                    fetchAssignedEmployees(assignmentManager.id);
+                    fetchAvailableEmployees(assignmentManager.id);
+                    }}
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+              <div className="assignment-bulk-search">
+                <label>
+                  <span>Paste Employee Codes</span>
+                  <textarea
+                    value={assignmentBulkCodes}
+                    onChange={(event) => setAssignmentBulkCodes(event.target.value.toUpperCase())}
+                    placeholder="MAS10001, MAS10002, MAS10003"
+                  />
+                </label>
+                <button type="button" onClick={searchAssignmentBulkCodes}>
+                  Find EmpCodes
+                </button>
+                {assignmentBulkCodes && (
+                  <button
+                    type="button"
+                    className="bulk-clear-btn"
+                    onClick={() => {
+                      setAssignmentBulkCodes('');
+                      setAssignmentSearchResults([]);
+                      setSelectedAvailableEmployeeIds([]);
+                      fetchAvailableEmployees(assignmentManager.id);
+                    }}
+                  >
+                    Clear Codes
+                  </button>
+                )}
+              </div>
+              <div className="assignment-columns">
+                <div className="assignment-column">
+                  <div className="assignment-column-head">
+                    <div>
+                      <span className="panel-kicker">Available Employees</span>
+                      <strong>{availableAssignmentEmployees.length} found</strong>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAvailableEmployeeIds(
+                        availableAssignmentEmployees.map((employee) => employee.id)
+                      )}
+                    >
+                      Select All
+                    </button>
+                  </div>
+                  <div className="assignment-list">
+                    {availableAssignmentEmployees.map((employee) => (
+                      <label className="assignment-row" key={employee.id}>
+                        <input
+                          type="checkbox"
+                          checked={selectedAvailableEmployeeIds.includes(employee.id)}
+                          onChange={() => toggleEmployeeSelection(employee.id, false)}
+                        />
+                        <span>
+                          <strong>{employee.emp_name}</strong>
+                          <small>
+                            {employee.emp_code} | {employee.designation}
+                            {employee.assigned_manager_name
+                              ? ` | Current: ${employee.assigned_manager_name}`
+                              : ' | Unassigned'}
+                          </small>
+                        </span>
+                      </label>
+                    ))}
+                    {availableAssignmentEmployees.length === 0 && (
+                      <div className="empty-list">No available employees found.</div>
+                    )}
+                  </div>
+                  {assignmentHasMore && (
+                    <button
+                      type="button"
+                      className="assignment-load-more-btn"
+                      onClick={() => fetchAvailableEmployees(
+                        assignmentManager.id,
+                        assignmentIdSearch,
+                        assignmentNameSearch,
+                        assignmentAvailableOffset,
+                        true,
+                        assignmentBulkCodes
+                      )}
+                    >
+                      Load More Employees
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="assignment-primary-btn"
+                    disabled={selectedAvailableEmployeeIds.length === 0}
+                    onClick={() => updateEmployeeAssignments('assign')}
+                  >
+                    Assign Selected ({selectedAvailableEmployeeIds.length})
+                  </button>
+                </div>
+                <div className="assignment-column">
+                  <div className="assignment-column-head">
+                    <div>
+                      <span className="panel-kicker">Currently Assigned</span>
+                      <strong>
+                        Showing {assignedEmployees.length} of {Math.max(
+                          assignedEmployees.length,
+                          assignmentManager.assigned_employee_count || 0
+                        )}
+                      </strong>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAssignedEmployeeIds(
+                        assignedEmployees.map((employee) => employee.id)
+                      )}
+                    >
+                      Select All
+                    </button>
+                  </div>
+                  <div className="assignment-list">
+                    {assignedEmployees.map((employee) => (
+                      <label className="assignment-row" key={employee.id}>
+                        <input
+                          type="checkbox"
+                          checked={selectedAssignedEmployeeIds.includes(employee.id)}
+                          onChange={() => toggleEmployeeSelection(employee.id, true)}
+                        />
+                        <span>
+                          <strong>{employee.emp_name}</strong>
+                          <small>{employee.emp_code} | {employee.designation}</small>
+                        </span>
+                      </label>
+                    ))}
+                    {assignedEmployees.length === 0 && (
+                      <div className="empty-list">No employees assigned yet.</div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="assignment-remove-btn"
+                    disabled={selectedAssignedEmployeeIds.length === 0}
+                    onClick={() => updateEmployeeAssignments('remove')}
+                  >
+                    Remove Selected ({selectedAssignedEmployeeIds.length})
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
+        </section>
+      )}
+
+      {(showHolidayPanel || activeAdminTask === 'holidays') && (
         <div className="admin-panel">
           <h3>Manage Holidays</h3>
           <form onSubmit={createHoliday} className="holiday-form">
@@ -1061,7 +1971,7 @@ function App() {
         </div>
       )}
 
-      {isAdmin && showEmployeePanel && (
+      {(showEmployeePanel || activeAdminTask === 'employees') && (
         <section className="admin-panel employee-panel">
           <div className="panel-heading">
             <div>
@@ -1117,35 +2027,70 @@ function App() {
           {employeeFormMessage && (
             <div className="employee-form-message" role="status">{employeeFormMessage}</div>
           )}
-          <div className="employee-list">
-            <div className="employee-list-head">
-              <span>ID</span>
-              <span>Employee</span>
-              <span>Designation</span>
-              <span>Role</span>
-              <span>Emp Code</span>
-              <span>Action</span>
-            </div>
-            {employees.map((employee) => (
-              <div className="employee-list-row" key={employee.id}>
-                <span>{employee.id}</span>
-                <strong>{employee.emp_name}</strong>
-                <span>{employee.designation}</span>
-                <span>{employee.role}</span>
-                <span>{employee.emp_code}</span>
-                <button type="button" className="edit-btn" onClick={() => editEmployee(employee)}>
-                  Edit
-                </button>
-              </div>
-            ))}
-            {employees.length === 0 && (
-              <div className="empty-list">No employees found.</div>
+          <div className="employee-search">
+            <label>
+              <span>Search by ID</span>
+              <input
+                type="search"
+                value={employeeIdSearch}
+                onChange={(event) => setEmployeeIdSearch(event.target.value)}
+                placeholder="Employee ID or code"
+              />
+            </label>
+            <label>
+              <span>Search by Name</span>
+              <input
+                type="search"
+                value={employeeNameSearch}
+                onChange={(event) => setEmployeeNameSearch(event.target.value)}
+                placeholder="Employee name"
+              />
+            </label>
+            {(employeeIdSearch || employeeNameSearch) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEmployeeIdSearch('');
+                  setEmployeeNameSearch('');
+                }}
+              >
+                Clear Search
+              </button>
             )}
           </div>
+          {hasEmployeeSearch && (
+            <div className="employee-list">
+              <div className="employee-list-head">
+                <span>ID</span>
+                <span>Employee</span>
+                <span>Designation</span>
+                <span>Role</span>
+                <span>Emp Code</span>
+                <span>Action</span>
+              </div>
+              {filteredEmployees.map((employee) => (
+                <div className="employee-list-row" key={employee.id}>
+                  <span>{employee.id}</span>
+                  <strong>{employee.emp_name}</strong>
+                  <span>{employee.designation}</span>
+                  <span>{employee.role}</span>
+                  <span>{employee.emp_code}</span>
+                  <button type="button" className="edit-btn" onClick={() => editEmployee(employee)}>
+                    Edit
+                  </button>
+                </div>
+              ))}
+              {filteredEmployees.length === 0 && (
+                <div className="empty-list">
+                  {employees.length === 0 ? 'No employees found.' : 'No employees match your search.'}
+                </div>
+              )}
+            </div>
+          )}
         </section>
       )}
 
-      {isSuperAdmin && !loading && attendance.length > 0 && (
+      {isSuperAdmin && !activeAdminTask && !loading && attendance.length > 0 && (
         (() => {
           const uniqueIds = [...new Set(attendance.map((r) => r.UserID))];
           if (uniqueIds.length <= 1) return null;
@@ -1203,9 +2148,9 @@ function App() {
         })()
       )}
 
-      {loading && <div className="loader">Loading...</div>}
-      {error && <div className="dash-error">{error}</div>}
-      {!loading && (
+      {!activeAdminTask && loading && <div className="loader">Loading...</div>}
+      {!activeAdminTask && error && <div className="dash-error">{error}</div>}
+      {!activeAdminTask && !loading && (
         <div className="cal-card">
           <Calendar
             activeStartDate={new Date(year, month - 1, 1)}
