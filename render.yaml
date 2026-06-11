@@ -3,32 +3,35 @@ services:
     name: biometric-backend
     runtime: docker
     plan: free
+    healthCheckPath: /health
     envVars:
-      - key: PORT
-        value: 8000
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: SQL_SERVER
-        sync: false
+        value: "172.10.10.146"
       - key: SQL_PORT
-        value: 1433
+        value: "1433"
       - key: SQL_DATABASE
-        sync: false
+        value: "NCOSEC"
       - key: SQL_USER
-        sync: false
+        value: "shivamg"
       - key: SQL_PASSWORD
         sync: false
+      - key: SQL_CONNECTION_MODE
+        value: "pymssql"
+      - key: SQL_TDS_VERSION
+        value: "7.0"
       - key: SQL_DRIVER
         value: "{ODBC Driver 17 for SQL Server}"
       - key: MYSQL_HOST
-        sync: false
+        value: "122.184.128.90"
       - key: MYSQL_PORT
-        value: 3306
+        value: "3306"
       - key: MYSQL_DATABASE
-        sync: false
+        value: "Shivamgiri"
       - key: MYSQL_USER
-        sync: false
+        value: "root"
       - key: MYSQL_PASSWORD
         sync: false
       - key: CORS_ORIGINS
-        sync: false
+        value: "https://biometric-78e6.vercel.app,http://localhost:3000,http://127.0.0.1:3000"
