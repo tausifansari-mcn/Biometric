@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import App, { buildSummary } from './App';
 
 jest.mock('react-calendar', () => (props) => (
@@ -118,6 +118,75 @@ test('keeps calendar visible and restores employee details when profile API fail
 
   fireEvent.click(screen.getByRole('button', { name: 'Open profile' }));
   expect(screen.getByText('Software Engineer')).toBeInTheDocument();
+});
+
+test('refreshes attendance every five seconds without hiding the calendar', async () => {
+  jest.useFakeTimers();
+  localStorage.setItem('token', 'header.eyJzdWIiOiJNQVM2MDM1OCIsInJvbGUiOiJFbXBsb3llZSJ9.signature');
+  localStorage.setItem('attendanceProfileV2', JSON.stringify({
+    name: 'Test Employee',
+    emp_code: 'MAS60358',
+    designation: 'Software Engineer',
+    role: 'Employee'
+  }));
+
+  let attendanceRequestCount = 0;
+  let resolveBackgroundRefresh;
+  global.fetch = jest.fn((url) => {
+    if (url.includes('/api/attendance')) {
+      attendanceRequestCount += 1;
+      if (attendanceRequestCount === 1) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve([])
+        });
+      }
+      return new Promise((resolve) => {
+        resolveBackgroundRefresh = resolve;
+      });
+    }
+    if (url.includes('/api/profile')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          name: 'Test Employee',
+          emp_code: 'MAS60358',
+          designation: 'Software Engineer',
+          role: 'Employee',
+          is_manager: false
+        })
+      });
+    }
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve([])
+    });
+  });
+
+  render(<App />);
+  expect(await screen.findByTestId('calendar')).toBeInTheDocument();
+
+  await act(async () => {
+    jest.advanceTimersByTime(5000);
+    await Promise.resolve();
+  });
+
+  expect(attendanceRequestCount).toBe(2);
+  expect(screen.getByTestId('calendar')).toBeInTheDocument();
+  expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+
+  await act(async () => {
+    resolveBackgroundRefresh({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve([])
+    });
+    await Promise.resolve();
+  });
+  jest.useRealTimers();
 });
 
 test('keeps Designation separate from Role when stale cache had the role in both fields', async () => {

@@ -260,11 +260,16 @@ function App() {
   useEffect(() => { searchEmpCodeRef.current = searchEmpCode; }, [searchEmpCode]);
   const searchEmpNameRef = useRef(searchEmpName);
   useEffect(() => { searchEmpNameRef.current = searchEmpName; }, [searchEmpName]);
+  const attendanceRefreshInFlightRef = useRef(false);
 
-  const fetchAttendance = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    setSearchMessage('');
+  const fetchAttendance = useCallback(async ({ silent = false } = {}) => {
+    if (attendanceRefreshInFlightRef.current) return;
+    attendanceRefreshInFlightRef.current = true;
+    if (!silent) {
+      setLoading(true);
+      setError('');
+      setSearchMessage('');
+    }
     try {
       const isSuperAdmin = roleRef.current.toLowerCase() === 'superadmin';
       let url = `${API_BASE_URL}/api/attendance?month=${selectedMonth}`;
@@ -317,9 +322,10 @@ function App() {
         saveProfile(fallbackProfile);
       }
     } catch (requestError) {
-      setError(requestError.message);
+      if (!silent) setError(requestError.message);
     } finally {
-      setLoading(false);
+      attendanceRefreshInFlightRef.current = false;
+      if (!silent) setLoading(false);
     }
   }, [handleLogout, selectedMonth, token]);
 
@@ -496,6 +502,14 @@ function App() {
     fetchHolidays();
     fetchProfile();
   }, [fetchAttendance, fetchHolidays, fetchProfile, searchVersion, token]);
+
+  useEffect(() => {
+    if (!token || activeAdminTask) return undefined;
+    const refreshTimer = window.setInterval(() => {
+      fetchAttendance({ silent: true });
+    }, 5000);
+    return () => window.clearInterval(refreshTimer);
+  }, [activeAdminTask, fetchAttendance, token]);
 
   useEffect(() => {
     if (!token || (!showSupportPanel && activeAdminTask !== 'support')) return undefined;
