@@ -714,7 +714,35 @@ html, body {
     font-size: 0.8rem;
   }
   .tile-label { font-size: 0.62rem; }
-  .day-tooltip { width: 220px; left: 60%; transform: translateX(-30%); }
+  .day-tooltip {
+    width: 220px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .att-cal .react-calendar__month-view__days > button:nth-child(7n+1) .day-tooltip,
+  .att-cal .react-calendar__month-view__days > button:nth-child(7n+2) .day-tooltip {
+    right: auto;
+    left: -4px;
+    transform: none;
+  }
+  .att-cal .react-calendar__month-view__days > button:nth-child(7n+1) .tt-arrow,
+  .att-cal .react-calendar__month-view__days > button:nth-child(7n+2) .tt-arrow {
+    right: auto;
+    left: 12px;
+    transform: none;
+  }
+  .att-cal .react-calendar__month-view__days > button:nth-child(7n) .day-tooltip,
+  .att-cal .react-calendar__month-view__days > button:nth-child(7n-1) .day-tooltip {
+    right: -4px;
+    left: auto;
+    transform: none;
+  }
+  .att-cal .react-calendar__month-view__days > button:nth-child(7n) .tt-arrow,
+  .att-cal .react-calendar__month-view__days > button:nth-child(7n-1) .tt-arrow {
+    right: 12px;
+    left: auto;
+    transform: none;
+  }
   .cal-legend { gap: 16px; flex-wrap: wrap; }
   .dash-header {
     grid-template-columns: auto 1fr;
