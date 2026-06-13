@@ -2,6 +2,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import './App.css';
+import ApplicationAccess from './ApplicationAccess';
+import ReportDashboard from './ReportDashboard';
+import RosterManagement from './RosterManagement';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL
   || `${window.location.protocol}//${window.location.hostname}:8000`;
@@ -56,11 +59,11 @@ const saveProfile = (profile) => {
 const getAllowedTasks = (role, isManager = false) => {
   const normalizedRole = String(role || '').toLowerCase();
   if (normalizedRole === 'superadmin') {
-    return ['employees', 'managers', 'queries', 'password_resets', 'holidays', 'support'];
+    return ['reports', 'roster', 'access', 'employees', 'managers', 'queries', 'password_resets', 'holidays', 'support'];
   }
   if (normalizedRole === 'admin') return ['queries', 'holidays', 'support'];
   if (normalizedRole === 'manager' || isManager) {
-    return ['queries', 'password_resets', 'support'];
+    return ['reports', 'roster', 'queries', 'password_resets', 'support'];
   }
   return ['support'];
 };
@@ -1644,6 +1647,33 @@ function App() {
               <div className="profile-row"><span>LOB</span><strong>{lobName}</strong></div>
             )}
             <div className="profile-actions task-profile-actions">
+              {allowedTasks.includes('reports') && (
+                <button
+                  className="profile-action profile-action-report"
+                  type="button"
+                  onClick={() => openTask('reports')}
+                >
+                  View Reports
+                </button>
+              )}
+              {allowedTasks.includes('roster') && (
+                <button
+                  className="profile-action profile-action-roster"
+                  type="button"
+                  onClick={() => openTask('roster')}
+                >
+                  Manage Roster
+                </button>
+              )}
+              {allowedTasks.includes('access') && (
+                <button
+                  className="profile-action profile-action-access"
+                  type="button"
+                  onClick={() => openTask('access')}
+                >
+                  Application Access
+                </button>
+              )}
               {allowedTasks.includes('employees') && (
                 <button
                   className="profile-action profile-action-secondary"
@@ -1727,6 +1757,33 @@ function App() {
             <span>{role || 'Employee'}</span>
             <strong>Task Center</strong>
           </div>
+          {allowedTasks.includes('reports') && (
+            <button
+              type="button"
+              className={activeAdminTask === 'reports' ? 'active' : ''}
+              onClick={() => openTask('reports')}
+            >
+              <span>R</span> Reports
+            </button>
+          )}
+          {allowedTasks.includes('roster') && (
+            <button
+              type="button"
+              className={activeAdminTask === 'roster' ? 'active' : ''}
+              onClick={() => openTask('roster')}
+            >
+              <span>S</span> Roster & Shifts
+            </button>
+          )}
+          {allowedTasks.includes('access') && (
+            <button
+              type="button"
+              className={activeAdminTask === 'access' ? 'active' : ''}
+              onClick={() => openTask('access')}
+            >
+              <span>A</span> Application Access
+            </button>
+          )}
           {allowedTasks.includes('employees') && (
             <button
               type="button"
@@ -2114,6 +2171,31 @@ function App() {
           <div className="stat-card"><div className="stat-icon si-halfday">HD</div><div className="stat-num sn-halfday">{summary.halfDay}</div><div className="stat-lbl">Half Day</div><div className="stat-bar sb-halfday" /></div>
           <div className="stat-card"><div className="stat-icon si-absent">A</div><div className="stat-num sn-absent">{summary.absent}</div><div className="stat-lbl">Absent / Short</div><div className="stat-bar sb-absent" /></div>
         </div>
+      )}
+
+      {activeAdminTask === 'reports' && (
+        <ReportDashboard
+          apiBaseUrl={API_BASE_URL}
+          token={token}
+          initialMonth={selectedMonth}
+        />
+      )}
+
+      {activeAdminTask === 'roster' && (
+        <RosterManagement
+          apiBaseUrl={API_BASE_URL}
+          token={token}
+          initialMonth={selectedMonth}
+          canManageShifts={isSuperAdmin}
+        />
+      )}
+
+      {activeAdminTask === 'access' && (
+        <ApplicationAccess
+          apiBaseUrl={API_BASE_URL}
+          token={token}
+          currentEmpCode={employeeCode}
+        />
       )}
 
       {activeAdminTask === 'managers' && (
@@ -2625,7 +2707,7 @@ function App() {
               />
             </label>
             <label>
-              <span>Status</span>
+              <span>Application Access</span>
               <select
                 value={newEmployee.status}
                 onChange={(event) => updateNewEmployee('status', event.target.value)}
@@ -2652,7 +2734,7 @@ function App() {
                 <small>Maximum 500 employees per batch</small>
               </div>
               <code>
-                Employee Code, Employee Name, Designation, Role, Process, LOBName, Status
+                Employee Code, Employee Name, Designation, Role, Process, LOBName, Application Access
               </code>
               <label>
                 <span>Bulk Employee Rows</span>
@@ -2732,7 +2814,7 @@ function App() {
                 <span>Role</span>
                 <span>Process</span>
                 <span>LOBName</span>
-                <span>Status</span>
+                <span>App Access</span>
                 <span>Action</span>
               </div>
               {filteredEmployees.map((employee) => (
