@@ -1,0 +1,23 @@
+Databases Used
+NCOSEC: Microsoft SQL Server
+Stores biometric attendance punches.
+
+Shivamgiri: MySQL
+Stores employees, managers, holidays, support queries and password resets.
+
+Tables Used
+Database	Table	Purpose
+NCOSEC	Mx_ATDEventTrn	Biometric punches using UserID and Edatetime. Calculates punch-in, punch-out and working hours.
+Shivamgiri	EmployeeDetails	Employee name, EmpCode, designation, role, password and assigned manager.
+Shivamgiri	Managers	Manager EmpCode, name, process and unique manager code.
+Shivamgiri	Holidays	Holiday date, reason and creator.
+Shivamgiri	SupportQueries	Employee query subject/message, manager, attachment, status and resolution details.
+Shivamgiri	PasswordResetRequests	Pending, approved and rejected password-reset requests.
+
+Main Relationships
+EmployeeDetails.assign_manager_id → Managers.managar_unique_code
+SupportQueries.EmployeeID → EmployeeDetails.ID
+SupportQueries.ManagerID → Managers.ID
+PasswordResetRequests.EmployeeID → EmployeeDetails.ID
+PasswordResetRequests.ManagerID → Managers.ID
+Mx_ATDEventTrn.UserID matches EmployeeDetails.EmpCode

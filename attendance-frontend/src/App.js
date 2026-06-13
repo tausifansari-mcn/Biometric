@@ -97,6 +97,91 @@ export const buildSummary = (year, month, attendanceByDate, holidayByDate, today
   return summary;
 };
 
+export const getCalendarTileClassName = ({ date, view }) => {
+  if (view !== 'month') return '';
+  const firstDayOffset = new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  const firstRowLastDate = 7 - firstDayOffset;
+  return [
+    `calendar-column-${date.getDay()}`,
+    date.getDate() <= firstRowLastDate ? 'calendar-tooltip-below' : ''
+  ].filter(Boolean).join(' ');
+};
+
+const parseCsvRow = (line) => {
+  const values = [];
+  let value = '';
+  let quoted = false;
+  const delimiter = line.includes('\t') && !line.includes(',') ? '\t' : ',';
+
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+    if (character === '"') {
+      if (quoted && line[index + 1] === '"') {
+        value += '"';
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (character === delimiter && !quoted) {
+      values.push(value.trim());
+      value = '';
+    } else {
+      value += character;
+    }
+  }
+  if (quoted) throw new Error('A bulk row contains an unclosed quote.');
+  values.push(value.trim());
+  return values;
+};
+
+const parseBulkEmployees = (text) => {
+  const rows = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (rows.length === 0) throw new Error('Paste at least one employee row.');
+
+  const dataRows = rows.filter((line, index) => (
+    index !== 0 || parseCsvRow(line)[0].toLowerCase() !== 'employee code'
+  ));
+  if (dataRows.length === 0) throw new Error('Paste at least one employee row below the header.');
+  if (dataRows.length > 500) throw new Error('You can add a maximum of 500 employees at once.');
+
+  return dataRows.map((line, index) => {
+    const fields = parseCsvRow(line);
+    if (fields.length !== 7) {
+      throw new Error(`Bulk row ${index + 1} must contain exactly 7 comma-separated fields.`);
+    }
+    const [empCode, empName, designation, role, process, lob, status] = fields;
+    const roleByName = {
+      employee: 'Employee',
+      admin: 'Admin',
+      superadmin: 'SuperAdmin'
+    };
+    const normalizedRole = roleByName[String(role || 'Employee').toLowerCase()];
+    const normalizedStatus = status
+      ? `${status.charAt(0).toUpperCase()}${status.slice(1).toLowerCase()}`
+      : 'Active';
+    if (!empCode || !empName || !process || !lob) {
+      throw new Error(
+        `Bulk row ${index + 1} requires Employee Code, Employee Name, Process, and LOBName.`
+      );
+    }
+    if (!normalizedRole) {
+      throw new Error(`Bulk row ${index + 1} has an invalid Role.`);
+    }
+    if (!['Active', 'Inactive'].includes(normalizedStatus)) {
+      throw new Error(`Bulk row ${index + 1} has an invalid Status.`);
+    }
+    return {
+      emp_code: empCode.toUpperCase(),
+      emp_name: empName,
+      designation: designation || 'Executive',
+      role: normalizedRole,
+      process_name: process,
+      lob_name: lob,
+      status: normalizedStatus
+    };
+  });
+};
+
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const initialProfile = readStoredProfile();
@@ -112,6 +197,8 @@ function App() {
   const [employeeCode, setEmployeeCode] = useState(initialProfile.emp_code || tokenProfile.emp_code || '');
   const [designation, setDesignation] = useState('Not specified');
   const [role, setRole] = useState(initialProfile.role || tokenProfile.role || '');
+  const [processName, setProcessName] = useState(initialProfile.process_name || '');
+  const [lobName, setLobName] = useState(initialProfile.lob_name || '');
   const [profileOpen, setProfileOpen] = useState(false);
   const [showHolidayPanel, setShowHolidayPanel] = useState(false);
   const [showEmployeePanel, setShowEmployeePanel] = useState(false);
@@ -123,11 +210,14 @@ function App() {
   const [managerQueries, setManagerQueries] = useState([]);
   const [passwordResetRequests, setPasswordResetRequests] = useState([]);
   const [passwordResetMessage, setPasswordResetMessage] = useState('');
+  const [supportSubject, setSupportSubject] = useState('');
   const [supportText, setSupportText] = useState('');
   const [supportImage, setSupportImage] = useState(null);
   const [supportFileKey, setSupportFileKey] = useState(0);
   const [supportMessage, setSupportMessage] = useState('');
   const [supportLoading, setSupportLoading] = useState(false);
+  const [managerQuerySubjectSearch, setManagerQuerySubjectSearch] = useState('');
+  const [managerQueryEmpIdSearch, setManagerQueryEmpIdSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -138,15 +228,22 @@ function App() {
   const [newHolidayReason, setNewHolidayReason] = useState('');
   const [editingHolidayId, setEditingHolidayId] = useState(null);
   const [newEmployee, setNewEmployee] = useState({
+    emp_code: '',
     emp_name: '',
-    designation: '',
+    designation: 'Executive',
     role: 'Employee',
-    emp_code: ''
+    process_name: '',
+    lob_name: '',
+    status: 'Active'
   });
   const [employeeFormMessage, setEmployeeFormMessage] = useState('');
   const [editingEmployeeId, setEditingEmployeeId] = useState(null);
+  const [bulkEmployeeOpen, setBulkEmployeeOpen] = useState(false);
+  const [bulkEmployeeText, setBulkEmployeeText] = useState('');
+  const [bulkEmployeeMessage, setBulkEmployeeMessage] = useState('');
   const [employeeIdSearch, setEmployeeIdSearch] = useState('');
   const [employeeNameSearch, setEmployeeNameSearch] = useState('');
+  const [employeeSearchActive, setEmployeeSearchActive] = useState(false);
   const [managers, setManagers] = useState([]);
   const [newManager, setNewManager] = useState({
     manager_empcode: '',
@@ -162,6 +259,14 @@ function App() {
   const [assignmentIdSearch, setAssignmentIdSearch] = useState('');
   const [assignmentNameSearch, setAssignmentNameSearch] = useState('');
   const [assignmentBulkCodes, setAssignmentBulkCodes] = useState('');
+  const [agentProcessOptions, setAgentProcessOptions] = useState({
+    processes: [],
+    lobs: [],
+    lobsByProcess: {}
+  });
+  const [assignmentGroupType, setAssignmentGroupType] = useState('process');
+  const [assignmentGroupProcess, setAssignmentGroupProcess] = useState('');
+  const [assignmentGroupValue, setAssignmentGroupValue] = useState('');
   const [selectedAvailableEmployeeIds, setSelectedAvailableEmployeeIds] = useState([]);
   const [selectedAssignedEmployeeIds, setSelectedAssignedEmployeeIds] = useState([]);
   const [assignmentMessage, setAssignmentMessage] = useState('');
@@ -171,6 +276,7 @@ function App() {
   const [searchEmpName, setSearchEmpName] = useState('');
   const [searchVersion, setSearchVersion] = useState(0);
   const [searchMessage, setSearchMessage] = useState('');
+  const [attendanceSearchOpen, setAttendanceSearchOpen] = useState(false);
   const profileButtonRef = useRef(null);
   const profilePopupRef = useRef(null);
 
@@ -208,6 +314,8 @@ function App() {
     setEmployeeCode('');
     setDesignation('Not specified');
     setRole('');
+    setProcessName('');
+    setLobName('');
     setProfileOpen(false);
     setShowHolidayPanel(false);
     setShowEmployeePanel(false);
@@ -219,13 +327,29 @@ function App() {
     setManagerQueries([]);
     setPasswordResetRequests([]);
     setPasswordResetMessage('');
+    setSupportSubject('');
     setSupportText('');
     setSupportImage(null);
     setSupportMessage('');
+    setManagerQuerySubjectSearch('');
+    setManagerQueryEmpIdSearch('');
     setEmployeeFormMessage('');
     setEditingEmployeeId(null);
+    setNewEmployee({
+      emp_code: '',
+      emp_name: '',
+      designation: 'Executive',
+      role: 'Employee',
+      process_name: '',
+      lob_name: '',
+      status: 'Active'
+    });
+    setBulkEmployeeOpen(false);
+    setBulkEmployeeText('');
+    setBulkEmployeeMessage('');
     setEmployeeIdSearch('');
     setEmployeeNameSearch('');
+    setEmployeeSearchActive(false);
     setManagers([]);
     setNewManager({
       manager_empcode: '',
@@ -241,6 +365,10 @@ function App() {
     setAssignmentIdSearch('');
     setAssignmentNameSearch('');
     setAssignmentBulkCodes('');
+    setAgentProcessOptions({ processes: [], lobs: [], lobsByProcess: {} });
+    setAssignmentGroupType('process');
+    setAssignmentGroupProcess('');
+    setAssignmentGroupValue('');
     setSelectedAvailableEmployeeIds([]);
     setSelectedAssignedEmployeeIds([]);
     setAssignmentMessage('');
@@ -251,6 +379,7 @@ function App() {
     setSearchEmpName('');
     setSearchVersion(0);
     setSearchMessage('');
+    setAttendanceSearchOpen(false);
     setError('');
   }, []);
 
@@ -358,14 +487,20 @@ function App() {
       setEmployeeCode(data.emp_code || '');
       setDesignation(data.designation || 'Not specified');
       setRole(data.role || 'User');
+      setProcessName(data.process_name || '');
+      setLobName(data.lob_name || '');
       setIsManager(Boolean(data.is_manager));
       saveProfile(data);
     } catch {}
   }, [handleLogout, token]);
 
-  const fetchEmployees = useCallback(async () => {
+  const fetchEmployees = useCallback(async (idSearch = '', nameSearch = '') => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/employees`, {
+      const params = new URLSearchParams();
+      if (idSearch.trim()) params.set('search_id', idSearch.trim());
+      if (nameSearch.trim()) params.set('search_name', nameSearch.trim());
+      const query = params.toString();
+      const response = await fetch(`${API_BASE_URL}/api/employees${query ? `?${query}` : ''}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to load employees');
@@ -416,16 +551,27 @@ function App() {
     nameSearch = '',
     offset = 0,
     append = false,
-    bulkCodes = ''
+    bulkCodes = '',
+    groupType = '',
+    groupValue = '',
+    groupProcess = ''
   ) => {
     try {
+      const resultLimit = groupValue.trim() ? 1000 : 100;
       const params = new URLSearchParams({
-        limit: '100',
+        limit: String(resultLimit),
         offset: String(offset)
       });
       if (idSearch.trim()) params.set('search_id', idSearch.trim());
       if (nameSearch.trim()) params.set('search_name', nameSearch.trim());
       if (bulkCodes.trim()) params.set('emp_codes', bulkCodes.trim());
+      if (groupType === 'process' && groupValue.trim()) {
+        params.set('process_name', groupValue.trim());
+      }
+      if (groupType === 'lob' && groupValue.trim()) {
+        if (groupProcess.trim()) params.set('process_name', groupProcess.trim());
+        params.set('lob_name', groupValue.trim());
+      }
       const response = await fetch(
         `${API_BASE_URL}/api/managers/${managerId}/assignment-employees?${params}`,
         { headers: { Authorization: `Bearer ${token}` } }
@@ -437,7 +583,32 @@ function App() {
         append ? [...currentRows, ...rows] : rows
       ));
       setAssignmentAvailableOffset(offset + rows.length);
-      setAssignmentHasMore(rows.length === 100);
+      setAssignmentHasMore(rows.length === resultLimit);
+      return rows;
+    } catch (requestError) {
+      setAssignmentMessage(requestError.message);
+      return [];
+    }
+  }, [token]);
+
+  const fetchAgentProcessOptions = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/agent-process/options`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.detail || 'Failed to load Process and LOB options');
+      }
+      setAgentProcessOptions({
+        processes: Array.isArray(data.processes) ? data.processes : [],
+        lobs: Array.isArray(data.lobs) ? data.lobs : [],
+        lobsByProcess: (
+          data.lobs_by_process
+          && typeof data.lobs_by_process === 'object'
+          && !Array.isArray(data.lobs_by_process)
+        ) ? data.lobs_by_process : {}
+      });
     } catch (requestError) {
       setAssignmentMessage(requestError.message);
     }
@@ -460,7 +631,7 @@ function App() {
     }
   }, [handleLogout, token]);
 
-  const fetchManagerQueries = useCallback(async () => {
+  const fetchManagerQueries = useCallback(async ({ silent = false } = {}) => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/manager/support-queries`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -473,11 +644,11 @@ function App() {
       if (!response.ok) throw new Error(data.detail || 'Failed to load manager queries');
       setManagerQueries(Array.isArray(data) ? data : []);
     } catch (requestError) {
-      setSupportMessage(requestError.message);
+      if (!silent) setSupportMessage(requestError.message);
     }
   }, [handleLogout, token]);
 
-  const fetchPasswordResetRequests = useCallback(async () => {
+  const fetchPasswordResetRequests = useCallback(async ({ silent = false } = {}) => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/manager/password-reset-requests`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -492,7 +663,7 @@ function App() {
       }
       setPasswordResetRequests(Array.isArray(data) ? data : []);
     } catch (requestError) {
-      setPasswordResetMessage(requestError.message);
+      if (!silent) setPasswordResetMessage(requestError.message);
     }
   }, [handleLogout, token]);
 
@@ -518,6 +689,29 @@ function App() {
     return () => window.clearInterval(refreshTimer);
   }, [activeAdminTask, fetchSupportQueries, showSupportPanel, token]);
 
+  useEffect(() => {
+    if (!token) return undefined;
+    const allowedNotificationTasks = getAllowedTasks(role, isManager);
+    const refreshNotifications = () => {
+      if (allowedNotificationTasks.includes('queries')) {
+        fetchManagerQueries({ silent: true });
+      }
+      if (allowedNotificationTasks.includes('password_resets')) {
+        fetchPasswordResetRequests({ silent: true });
+      }
+    };
+
+    refreshNotifications();
+    const refreshTimer = window.setInterval(refreshNotifications, 15000);
+    return () => window.clearInterval(refreshTimer);
+  }, [
+    fetchManagerQueries,
+    fetchPasswordResetRequests,
+    isManager,
+    role,
+    token
+  ]);
+
   const handleLogin = async (event) => {
     event.preventDefault();
     setLoading(true);
@@ -540,6 +734,8 @@ function App() {
       setEmployeeCode(data.emp_code || empCode);
       setDesignation(data.designation || 'Not specified');
       setRole(data.role || 'User');
+      setProcessName('');
+      setLobName('');
       setIsManager(String(data.role || '').toLowerCase() === 'manager');
       saveProfile({
         name: data.name || 'Employee',
@@ -672,12 +868,16 @@ function App() {
         `Employee ${data.emp_code} ${editingEmployeeId ? 'updated' : 'added'} successfully.`
       );
       setNewEmployee({
+        emp_code: '',
         emp_name: '',
-        designation: '',
+        designation: 'Executive',
         role: 'Employee',
-        emp_code: ''
+        process_name: '',
+        lob_name: '',
+        status: 'Active'
       });
       setEditingEmployeeId(null);
+      setEmployeeSearchActive(false);
       fetchEmployees();
     } catch (requestError) {
       setEmployeeFormMessage(requestError.message);
@@ -688,13 +888,27 @@ function App() {
     setNewEmployee((current) => ({ ...current, [field]: value }));
   };
 
+  const searchEmployees = async () => {
+    if (!employeeIdSearch.trim() && !employeeNameSearch.trim()) {
+      setEmployeeFormMessage('Enter an Employee ID, code, or name to search.');
+      return;
+    }
+    setEmployeeFormMessage('');
+    setEmployeeSearchActive(true);
+    await fetchEmployees(employeeIdSearch, employeeNameSearch);
+  };
+
   const editEmployee = (employee) => {
     setEditingEmployeeId(employee.id);
+    setBulkEmployeeOpen(false);
     setNewEmployee({
+      emp_code: employee.emp_code,
       emp_name: employee.emp_name,
       designation: employee.designation,
       role: employee.role,
-      emp_code: employee.emp_code
+      process_name: employee.process_name || '',
+      lob_name: employee.lob_name || '',
+      status: employee.status || 'Active'
     });
     setEmployeeFormMessage('');
   };
@@ -702,12 +916,39 @@ function App() {
   const cancelEmployeeEdit = () => {
     setEditingEmployeeId(null);
     setNewEmployee({
+      emp_code: '',
       emp_name: '',
-      designation: '',
+      designation: 'Executive',
       role: 'Employee',
-      emp_code: ''
+      process_name: '',
+      lob_name: '',
+      status: 'Active'
     });
     setEmployeeFormMessage('');
+  };
+
+  const saveBulkEmployees = async () => {
+    setBulkEmployeeMessage('');
+    try {
+      const bulkEmployees = parseBulkEmployees(bulkEmployeeText);
+      const response = await fetch(`${API_BASE_URL}/api/employees/bulk`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ employees: bulkEmployees })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || 'Failed to add bulk employees');
+
+      setBulkEmployeeMessage(`${data.created_count} employee(s) added successfully.`);
+      setBulkEmployeeText('');
+      setEmployeeSearchActive(false);
+      fetchEmployees();
+    } catch (requestError) {
+      setBulkEmployeeMessage(requestError.message);
+    }
   };
 
   const saveManager = async (event) => {
@@ -801,11 +1042,15 @@ function App() {
     setAssignmentIdSearch('');
     setAssignmentNameSearch('');
     setAssignmentBulkCodes('');
+    setAssignmentGroupType('process');
+    setAssignmentGroupProcess('');
+    setAssignmentGroupValue('');
     setSelectedAvailableEmployeeIds([]);
     setSelectedAssignedEmployeeIds([]);
     setAssignmentMessage('');
     setAssignmentAvailableOffset(0);
     setAssignmentHasMore(false);
+    fetchAgentProcessOptions();
     fetchAssignedEmployees(manager.id);
     fetchAvailableEmployees(manager.id);
   };
@@ -815,6 +1060,9 @@ function App() {
     setAssignedManagerEmployees([]);
     setAssignmentSearchResults([]);
     setAssignmentBulkCodes('');
+    setAssignmentGroupType('process');
+    setAssignmentGroupProcess('');
+    setAssignmentGroupValue('');
     setSelectedAvailableEmployeeIds([]);
     setSelectedAssignedEmployeeIds([]);
     setAssignmentMessage('');
@@ -827,6 +1075,9 @@ function App() {
     const idSearch = assignmentIdSearch.trim();
     const nameSearch = assignmentNameSearch.trim();
     if (!preserveMessage) setAssignmentMessage('');
+    setAssignmentBulkCodes('');
+    setAssignmentGroupProcess('');
+    setAssignmentGroupValue('');
     try {
       await fetchAvailableEmployees(
         assignmentManager.id,
@@ -862,6 +1113,8 @@ function App() {
 
     const normalizedCodes = codes.join(',');
     setAssignmentBulkCodes(normalizedCodes);
+    setAssignmentGroupProcess('');
+    setAssignmentGroupValue('');
     setAssignmentIdSearch('');
     setAssignmentNameSearch('');
     setAssignmentMessage('');
@@ -875,6 +1128,45 @@ function App() {
       false,
       normalizedCodes
     );
+  };
+
+  const searchAssignmentGroup = async () => {
+    if (!assignmentManager) return;
+    const groupProcess = assignmentGroupProcess.trim();
+    const groupValue = assignmentGroupValue.trim();
+    if (assignmentGroupType === 'lob' && !groupProcess) {
+      setAssignmentMessage('Select a Process first.');
+      return;
+    }
+    if (!groupValue) {
+      setAssignmentMessage(
+        `Select a ${assignmentGroupType === 'process' ? 'Process' : 'LOB'} first.`
+      );
+      return;
+    }
+
+    setAssignmentIdSearch('');
+    setAssignmentNameSearch('');
+    setAssignmentBulkCodes('');
+    setAssignmentMessage('');
+    setSelectedAssignedEmployeeIds([]);
+    const rows = await fetchAvailableEmployees(
+      assignmentManager.id,
+      '',
+      '',
+      0,
+      false,
+      '',
+      assignmentGroupType,
+      groupValue,
+      groupProcess
+    );
+    setSelectedAvailableEmployeeIds(rows.map((employee) => employee.id));
+    if (rows.length === 0) {
+      setAssignmentMessage(
+        `No available employees found for this ${assignmentGroupType === 'process' ? 'Process' : 'LOB'}.`
+      );
+    }
   };
 
   const toggleEmployeeSelection = (employeeId, assigned) => {
@@ -944,6 +1236,19 @@ function App() {
           false,
           assignmentBulkCodes
         );
+      } else if (assignmentGroupValue.trim()) {
+        const rows = await fetchAvailableEmployees(
+          assignmentManager.id,
+          '',
+          '',
+          0,
+          false,
+          '',
+          assignmentGroupType,
+          assignmentGroupValue,
+          assignmentGroupProcess
+        );
+        setSelectedAvailableEmployeeIds(rows.map((employee) => employee.id));
       } else {
         await fetchAvailableEmployees(assignmentManager.id);
       }
@@ -954,11 +1259,12 @@ function App() {
 
   const sendSupportQuery = async (event) => {
     event.preventDefault();
-    if (!supportText.trim()) return;
+    if (!supportSubject.trim() || !supportText.trim()) return;
 
     setSupportLoading(true);
     setSupportMessage('');
     const formData = new FormData();
+    formData.append('query_subject', supportSubject.trim());
     formData.append('query_text', supportText.trim());
     if (supportImage) formData.append('image', supportImage);
 
@@ -970,6 +1276,7 @@ function App() {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail || 'Failed to send query');
+      setSupportSubject('');
       setSupportText('');
       setSupportImage(null);
       setSupportFileKey((key) => key + 1);
@@ -1068,7 +1375,11 @@ function App() {
     setSupportMessage('');
     setPasswordResetMessage('');
 
-    if (task === 'employees') fetchEmployees();
+    if (task === 'employees') {
+      setEmployeeSearchActive(false);
+      setEmployees([]);
+      fetchEmployees();
+    }
     if (task === 'managers') fetchManagers();
     if (task === 'queries') fetchManagerQueries();
     if (task === 'password_resets') fetchPasswordResetRequests();
@@ -1079,6 +1390,8 @@ function App() {
     setSupportMessage('');
     setPasswordResetMessage('');
     setEditingEmployeeId(null);
+    setBulkEmployeeOpen(false);
+    setBulkEmployeeMessage('');
     setEditingHolidayId(null);
     closeEmployeeAssignment();
   };
@@ -1236,7 +1549,7 @@ function App() {
   const summary = buildSummary(year, month, attendanceByDate, holidayByDate, today);
   const isSuperAdmin = role.toLowerCase() === 'superadmin';
   const allowedTasks = getAllowedTasks(role, isManager);
-  const hasEmployeeSearch = Boolean(employeeIdSearch.trim() || employeeNameSearch.trim());
+  const hasEmployeeSearch = employeeSearchActive;
   const filteredEmployees = employees.filter((employee) => {
     const idSearch = employeeIdSearch.trim().toLowerCase();
     const nameSearch = employeeNameSearch.trim().toLowerCase();
@@ -1249,6 +1562,21 @@ function App() {
   });
   const assignedEmployees = assignedManagerEmployees;
   const availableAssignmentEmployees = assignmentSearchResults;
+  const openManagerQueryCount = managerQueries.filter((query) => query.status === 'Open').length;
+  const pendingPasswordResetCount = passwordResetRequests.filter(
+    (request) => request.status === 'Pending'
+  ).length;
+  const totalManagerNotificationCount = openManagerQueryCount + pendingPasswordResetCount;
+  const displayNotificationCount = (count) => (count > 99 ? '99+' : count);
+  const filteredManagerQueries = managerQueries.filter((query) => {
+    const subjectSearch = managerQuerySubjectSearch.trim().toLowerCase();
+    const empIdSearch = managerQueryEmpIdSearch.trim().toLowerCase();
+    const matchesSubject = !subjectSearch
+      || String(query.query_subject || 'General Query').toLowerCase().includes(subjectSearch);
+    const matchesEmpId = !empIdSearch
+      || String(query.employee_emp_code || '').toLowerCase().includes(empIdSearch);
+    return matchesSubject && matchesEmpId;
+  });
 
   return (
     <div className={`dashboard ${activeAdminTask ? 'admin-page-open' : ''}`}>
@@ -1267,6 +1595,12 @@ function App() {
             ref={profileButtonRef}
             aria-label="Open profile"
             aria-expanded={profileOpen}
+            data-notification-count={totalManagerNotificationCount}
+            title={
+              totalManagerNotificationCount > 0
+                ? `${totalManagerNotificationCount} pending notifications`
+                : 'Open profile'
+            }
             onClick={() => {
               if (!profileOpen) fetchProfile();
               setProfileOpen((open) => !open);
@@ -1275,6 +1609,14 @@ function App() {
             {employeeName
               ? employeeName.split(' ').map((name) => name[0]).join('').slice(0, 2)
               : 'PR'}
+            {totalManagerNotificationCount > 0 && (
+              <span
+                className="profile-notification-badge"
+                aria-hidden="true"
+              >
+                {displayNotificationCount(totalManagerNotificationCount)}
+              </span>
+            )}
           </button>
           <label className="month-wrap">
             <span className="month-lbl">Month</span>
@@ -1295,6 +1637,12 @@ function App() {
             <div className="profile-row"><span>Emp Code</span><strong>{employeeCode}</strong></div>
             <div className="profile-row"><span>Designation</span><strong>{designation}</strong></div>
             <div className="profile-row"><span>Role</span><strong>{role || 'Employee'}</strong></div>
+            {processName && (
+              <div className="profile-row"><span>Process</span><strong>{processName}</strong></div>
+            )}
+            {lobName && (
+              <div className="profile-row"><span>LOB</span><strong>{lobName}</strong></div>
+            )}
             <div className="profile-actions task-profile-actions">
               {allowedTasks.includes('employees') && (
                 <button
@@ -1318,18 +1666,36 @@ function App() {
                 <button
                   className="profile-action profile-action-manager"
                   type="button"
+                  aria-label="Query Bucket"
                   onClick={() => openTask('queries')}
                 >
-                  Query Bucket
+                  <span>Query Bucket</span>
+                  {openManagerQueryCount > 0 && (
+                    <span
+                      className="task-notification-badge"
+                      aria-hidden="true"
+                    >
+                      {displayNotificationCount(openManagerQueryCount)}
+                    </span>
+                  )}
                 </button>
               )}
               {allowedTasks.includes('password_resets') && (
                 <button
                   className="profile-action profile-action-password-reset"
                   type="button"
+                  aria-label="Reset Password Requests"
                   onClick={() => openTask('password_resets')}
                 >
-                  Reset Password Requests
+                  <span>Reset Password Requests</span>
+                  {pendingPasswordResetCount > 0 && (
+                    <span
+                      className="task-notification-badge"
+                      aria-hidden="true"
+                    >
+                      {displayNotificationCount(pendingPasswordResetCount)}
+                    </span>
+                  )}
                 </button>
               )}
               {allowedTasks.includes('holidays') && (
@@ -1383,18 +1749,38 @@ function App() {
             <button
               type="button"
               className={activeAdminTask === 'queries' ? 'active' : ''}
+              aria-label="Query Bucket"
               onClick={() => openTask('queries')}
             >
-              <span>{isSuperAdmin ? '3' : '1'}</span> Query Bucket
+              <span>{isSuperAdmin ? '3' : '1'}</span>
+              <span className="admin-task-label">Query Bucket</span>
+              {openManagerQueryCount > 0 && (
+                <span
+                  className="task-notification-badge"
+                  aria-hidden="true"
+                >
+                  {displayNotificationCount(openManagerQueryCount)}
+                </span>
+              )}
             </button>
           )}
           {allowedTasks.includes('password_resets') && (
             <button
               type="button"
               className={activeAdminTask === 'password_resets' ? 'active' : ''}
+              aria-label="Reset Password Requests"
               onClick={() => openTask('password_resets')}
             >
-              <span>{isSuperAdmin ? '4' : '2'}</span> Reset Password Requests
+              <span>{isSuperAdmin ? '4' : '2'}</span>
+              <span className="admin-task-label">Reset Password Requests</span>
+              {pendingPasswordResetCount > 0 && (
+                <span
+                  className="task-notification-badge"
+                  aria-hidden="true"
+                >
+                  {displayNotificationCount(pendingPasswordResetCount)}
+                </span>
+              )}
             </button>
           )}
           {allowedTasks.includes('holidays') && (
@@ -1422,45 +1808,80 @@ function App() {
       )}
 
       {isSuperAdmin && !activeAdminTask && (
-        <div className="search-row" style={{ display: 'flex', gap: '10px', padding: '10px 20px', alignItems: 'center', background: '#fff', borderBottom: '1px solid #eee', flexWrap: 'wrap' }}>
-          <input
-            type="text"
-            placeholder="Search by Emp Code"
-            value={searchEmpCode}
-            onChange={(event) => { setSearchEmpCode(event.target.value.toUpperCase()); setSearchEmpName(''); }}
-            style={{ padding: '6px 10px', borderRadius: '4px', border: '1px solid #ccc', minWidth: '160px' }}
-          />
-          <input
-            type="text"
-            placeholder="Search by Name"
-            value={searchEmpName}
-            onChange={(event) => { setSearchEmpName(event.target.value); setSearchEmpCode(''); }}
-            style={{ padding: '6px 10px', borderRadius: '4px', border: '1px solid #ccc', minWidth: '160px' }}
-          />
-          <button
-            type="button"
-            onClick={() => setSearchVersion((v) => v + 1)}
-            style={{ padding: '6px 14px', borderRadius: '4px', cursor: 'pointer', background: '#1976d2', color: '#fff', border: 'none' }}
-          >
-            Search
-          </button>
-          {(searchEmpCode || searchEmpName) && (
+        <section className={`attendance-search-card ${attendanceSearchOpen ? 'is-open' : ''}`}>
+          <div className="attendance-search-toolbar">
+            <div>
+              <span className="panel-kicker">SuperAdmin Tools</span>
+              <strong>Employee Attendance Search</strong>
+              {!attendanceSearchOpen && searchMessage && (
+                <small className="attendance-search-summary">{searchMessage}</small>
+              )}
+            </div>
             <button
               type="button"
-              onClick={() => {
-                setSearchEmpCode('');
-                setSearchEmpName('');
-                setSearchVersion((v) => v + 1);
-              }}
-              style={{ padding: '6px 14px', borderRadius: '4px', cursor: 'pointer', background: '#e0e0e0', border: 'none' }}
+              className="attendance-search-toggle"
+              aria-expanded={attendanceSearchOpen}
+              aria-controls="attendance-search-form"
+              onClick={() => setAttendanceSearchOpen((open) => !open)}
             >
-              Clear
+              {attendanceSearchOpen ? 'Hide Search' : 'Find Employee'}
             </button>
+          </div>
+
+          {attendanceSearchOpen && (
+            <div className="attendance-search-form" id="attendance-search-form">
+              <label>
+                <span>Employee Code</span>
+                <input
+                  type="search"
+                  placeholder="e.g., MAS10001"
+                  value={searchEmpCode}
+                  onChange={(event) => {
+                    setSearchEmpCode(event.target.value.toUpperCase());
+                    setSearchEmpName('');
+                  }}
+                />
+              </label>
+              <label>
+                <span>Employee Name</span>
+                <input
+                  type="search"
+                  placeholder="Search employee name"
+                  value={searchEmpName}
+                  onChange={(event) => {
+                    setSearchEmpName(event.target.value);
+                    setSearchEmpCode('');
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                className="attendance-search-submit"
+                disabled={!searchEmpCode.trim() && !searchEmpName.trim()}
+                onClick={() => setSearchVersion((version) => version + 1)}
+              >
+                Search Attendance
+              </button>
+              {(searchEmpCode || searchEmpName || searchMessage) && (
+                <button
+                  type="button"
+                  className="attendance-search-clear"
+                  onClick={() => {
+                    setSearchEmpCode('');
+                    setSearchEmpName('');
+                    setSearchMessage('');
+                    setSearchVersion((version) => version + 1);
+                  }}
+                >
+                  Clear
+                </button>
+              )}
+              {searchMessage && (
+                <div className="attendance-search-result" role="status">{searchMessage}</div>
+              )}
+            </div>
           )}
-          {searchMessage && (
-            <span style={{ marginLeft: 'auto', color: '#2e7d32', fontWeight: 500 }}>{searchMessage}</span>
-          )}
-        </div>
+        </section>
       )}
 
       {(showSupportPanel || activeAdminTask === 'support') && (
@@ -1473,8 +1894,19 @@ function App() {
             <span className="support-note">Image optional, maximum 5 MB</span>
           </div>
           <form className="support-form" onSubmit={sendSupportQuery}>
-            <label>
-              <span>Problem or query</span>
+            <label className="support-subject-field">
+              <span>Query Subject</span>
+              <input
+                type="text"
+                value={supportSubject}
+                onChange={(event) => setSupportSubject(event.target.value)}
+                placeholder="e.g., Missing punch for June 12"
+                maxLength={255}
+                required
+              />
+            </label>
+            <label className="support-message-field">
+              <span>Query</span>
               <textarea
                 value={supportText}
                 onChange={(event) => setSupportText(event.target.value)}
@@ -1506,6 +1938,7 @@ function App() {
                     {query.status}
                   </span>
                 </div>
+                <h4 className="query-subject">{query.query_subject || 'General Query'}</h4>
                 <p>{query.query_text}</p>
                 <div className="query-meta">
                   <span>Sent {formatDateTime(query.created_at)}</span>
@@ -1537,8 +1970,39 @@ function App() {
             </span>
           </div>
           {supportMessage && <div className="support-message" role="status">{supportMessage}</div>}
+          <div className="manager-query-search">
+            <label>
+              <span>Search by Subject</span>
+              <input
+                type="search"
+                value={managerQuerySubjectSearch}
+                onChange={(event) => setManagerQuerySubjectSearch(event.target.value)}
+                placeholder="Query subject"
+              />
+            </label>
+            <label>
+              <span>Search by Emp ID</span>
+              <input
+                type="search"
+                value={managerQueryEmpIdSearch}
+                onChange={(event) => setManagerQueryEmpIdSearch(event.target.value.toUpperCase())}
+                placeholder="Employee code"
+              />
+            </label>
+            {(managerQuerySubjectSearch || managerQueryEmpIdSearch) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setManagerQuerySubjectSearch('');
+                  setManagerQueryEmpIdSearch('');
+                }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
           <div className="query-list">
-            {managerQueries.map((query) => (
+            {filteredManagerQueries.map((query) => (
               <article className="query-card" key={query.id}>
                 <div className="query-card-head">
                   <strong>{query.employee_name} ({query.employee_emp_code})</strong>
@@ -1546,6 +2010,7 @@ function App() {
                     {query.status}
                   </span>
                 </div>
+                <h4 className="query-subject">{query.query_subject || 'General Query'}</h4>
                 <p>{query.query_text}</p>
                 <div className="query-meta">
                   <span>Received {formatDateTime(query.created_at)}</span>
@@ -1568,8 +2033,12 @@ function App() {
                 </div>
               </article>
             ))}
-            {managerQueries.length === 0 && (
-              <div className="empty-list">No employee queries found.</div>
+            {filteredManagerQueries.length === 0 && (
+              <div className="empty-list">
+                {managerQueries.length === 0
+                  ? 'No employee queries found.'
+                  : 'No queries match your search.'}
+              </div>
             )}
           </div>
         </section>
@@ -1804,12 +2273,15 @@ function App() {
                     type="button"
                     onClick={() => {
                       setAssignmentIdSearch('');
-                    setAssignmentNameSearch('');
-                    setAssignmentSearchResults([]);
-                    setSelectedAvailableEmployeeIds([]);
-                    setSelectedAssignedEmployeeIds([]);
-                    fetchAssignedEmployees(assignmentManager.id);
-                    fetchAvailableEmployees(assignmentManager.id);
+                      setAssignmentNameSearch('');
+                      setAssignmentBulkCodes('');
+                      setAssignmentGroupProcess('');
+                      setAssignmentGroupValue('');
+                      setAssignmentSearchResults([]);
+                      setSelectedAvailableEmployeeIds([]);
+                      setSelectedAssignedEmployeeIds([]);
+                      fetchAssignedEmployees(assignmentManager.id);
+                      fetchAvailableEmployees(assignmentManager.id);
                     }}
                   >
                     Clear
@@ -1843,6 +2315,86 @@ function App() {
                   </button>
                 )}
               </div>
+              <div className="assignment-group-search">
+                <div className="assignment-group-heading">
+                  <div>
+                    <span className="panel-kicker">Assign Complete Group</span>
+                    <strong>Assign by Process or LOB</strong>
+                  </div>
+                  <small>Matching employees will be selected automatically.</small>
+                </div>
+                <label>
+                  <span>Group Type</span>
+                  <select
+                    value={assignmentGroupType}
+                    onChange={(event) => {
+                      setAssignmentGroupType(event.target.value);
+                      setAssignmentGroupProcess('');
+                      setAssignmentGroupValue('');
+                    }}
+                  >
+                    <option value="process">Process</option>
+                    <option value="lob">LOB</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Process Name</span>
+                  <select
+                    value={assignmentGroupType === 'process'
+                      ? assignmentGroupValue
+                      : assignmentGroupProcess}
+                    onChange={(event) => {
+                      if (assignmentGroupType === 'process') {
+                        setAssignmentGroupValue(event.target.value);
+                      } else {
+                        setAssignmentGroupProcess(event.target.value);
+                        setAssignmentGroupValue('');
+                      }
+                    }}
+                  >
+                    <option value="">Select Process</option>
+                    {agentProcessOptions.processes.map((option) => (
+                      <option value={option} key={option}>{option}</option>
+                    ))}
+                  </select>
+                </label>
+                {assignmentGroupType === 'lob' && (
+                  <label>
+                    <span>LOB Name</span>
+                    <select
+                      value={assignmentGroupValue}
+                      disabled={!assignmentGroupProcess}
+                      onChange={(event) => setAssignmentGroupValue(event.target.value)}
+                    >
+                      <option value="">
+                        {assignmentGroupProcess ? 'Select LOB' : 'Select Process first'}
+                      </option>
+                      {(agentProcessOptions.lobsByProcess[assignmentGroupProcess] || [])
+                        .map((option) => (
+                          <option value={option} key={option}>{option}</option>
+                        ))}
+                    </select>
+                  </label>
+                )}
+                <button type="button" onClick={searchAssignmentGroup}>
+                  Load & Select Whole Group
+                </button>
+                {(assignmentGroupProcess || assignmentGroupValue) && (
+                  <button
+                    type="button"
+                    className="group-clear-btn"
+                    onClick={() => {
+                      setAssignmentGroupProcess('');
+                      setAssignmentGroupValue('');
+                      setAssignmentSearchResults([]);
+                      setSelectedAvailableEmployeeIds([]);
+                      fetchAvailableEmployees(assignmentManager.id);
+                    }}
+                  >
+                    Clear Group
+                  </button>
+                )}
+              </div>
               <div className="assignment-columns">
                 <div className="assignment-column">
                   <div className="assignment-column-head">
@@ -1871,6 +2423,8 @@ function App() {
                           <strong>{employee.emp_name}</strong>
                           <small>
                             {employee.emp_code} | {employee.designation}
+                            {employee.process_name ? ` | ${employee.process_name}` : ''}
+                            {employee.lob_name ? ` | ${employee.lob_name}` : ''}
                             {employee.assigned_manager_name
                               ? ` | Current: ${employee.assigned_manager_name}`
                               : ' | Unassigned'}
@@ -1892,7 +2446,10 @@ function App() {
                         assignmentNameSearch,
                         assignmentAvailableOffset,
                         true,
-                        assignmentBulkCodes
+                        assignmentBulkCodes,
+                        assignmentGroupType,
+                        assignmentGroupValue,
+                        assignmentGroupProcess
                       )}
                     >
                       Load More Employees
@@ -1992,9 +2549,33 @@ function App() {
               <span className="panel-kicker">Administration</span>
               <h3>{editingEmployeeId ? 'Edit Employee' : 'Add Employee'}</h3>
             </div>
-            <span className="auto-id-note">ID: Auto generated</span>
+            <div className="panel-heading-actions">
+              <span className="auto-id-note">ID: Auto generated</span>
+              {!editingEmployeeId && (
+                <button
+                  type="button"
+                  className="bulk-employee-toggle"
+                  aria-expanded={bulkEmployeeOpen}
+                  onClick={() => {
+                    setBulkEmployeeOpen((open) => !open);
+                    setBulkEmployeeMessage('');
+                  }}
+                >
+                  {bulkEmployeeOpen ? 'Hide Bulk Add' : 'Add Bulk Employees'}
+                </button>
+              )}
+            </div>
           </div>
           <form onSubmit={saveEmployee} className="employee-form">
+            <label>
+              <span>Employee Code</span>
+              <input
+                type="text"
+                value={newEmployee.emp_code}
+                onChange={(event) => updateNewEmployee('emp_code', event.target.value.toUpperCase())}
+                required
+              />
+            </label>
             <label>
               <span>Employee Name</span>
               <input
@@ -2010,6 +2591,7 @@ function App() {
                 type="text"
                 value={newEmployee.designation}
                 onChange={(event) => updateNewEmployee('designation', event.target.value)}
+                placeholder="Executive"
                 required
               />
             </label>
@@ -2025,13 +2607,32 @@ function App() {
               </select>
             </label>
             <label>
-              <span>Employee Code</span>
+              <span>Process</span>
               <input
                 type="text"
-                value={newEmployee.emp_code}
-                onChange={(event) => updateNewEmployee('emp_code', event.target.value.toUpperCase())}
+                value={newEmployee.process_name}
+                onChange={(event) => updateNewEmployee('process_name', event.target.value)}
                 required
               />
+            </label>
+            <label>
+              <span>LOBName</span>
+              <input
+                type="text"
+                value={newEmployee.lob_name}
+                onChange={(event) => updateNewEmployee('lob_name', event.target.value)}
+                required
+              />
+            </label>
+            <label>
+              <span>Status</span>
+              <select
+                value={newEmployee.status}
+                onChange={(event) => updateNewEmployee('status', event.target.value)}
+              >
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
             </label>
             <button type="submit">{editingEmployeeId ? 'Update Employee' : 'Add Employee'}</button>
             {editingEmployeeId && (
@@ -2041,13 +2642,54 @@ function App() {
           {employeeFormMessage && (
             <div className="employee-form-message" role="status">{employeeFormMessage}</div>
           )}
+          {bulkEmployeeOpen && (
+            <div className="bulk-employee-panel">
+              <div className="bulk-employee-head">
+                <div>
+                  <span className="panel-kicker">Paste From Excel or CSV</span>
+                  <strong>One employee per line, in the sequence shown below</strong>
+                </div>
+                <small>Maximum 500 employees per batch</small>
+              </div>
+              <code>
+                Employee Code, Employee Name, Designation, Role, Process, LOBName, Status
+              </code>
+              <label>
+                <span>Bulk Employee Rows</span>
+                <textarea
+                  value={bulkEmployeeText}
+                  onChange={(event) => setBulkEmployeeText(event.target.value)}
+                  placeholder={'MAS10001, Riya Sharma, Executive, Employee, Sales, Inbound, Active\nMAS10002, Aman Verma, Executive, Employee, Sales, Chat, Active'}
+                />
+              </label>
+              <div className="bulk-employee-actions">
+                <button type="button" onClick={saveBulkEmployees}>Add Bulk Employees</button>
+                <button
+                  type="button"
+                  className="bulk-clear-btn"
+                  onClick={() => {
+                    setBulkEmployeeText('');
+                    setBulkEmployeeMessage('');
+                  }}
+                >
+                  Clear
+                </button>
+              </div>
+              {bulkEmployeeMessage && (
+                <div className="employee-form-message" role="status">{bulkEmployeeMessage}</div>
+              )}
+            </div>
+          )}
           <div className="employee-search">
             <label>
               <span>Search by ID</span>
               <input
                 type="search"
                 value={employeeIdSearch}
-                onChange={(event) => setEmployeeIdSearch(event.target.value)}
+                onChange={(event) => {
+                  setEmployeeIdSearch(event.target.value);
+                  setEmployeeSearchActive(false);
+                }}
                 placeholder="Employee ID or code"
               />
             </label>
@@ -2056,16 +2698,24 @@ function App() {
               <input
                 type="search"
                 value={employeeNameSearch}
-                onChange={(event) => setEmployeeNameSearch(event.target.value)}
+                onChange={(event) => {
+                  setEmployeeNameSearch(event.target.value);
+                  setEmployeeSearchActive(false);
+                }}
                 placeholder="Employee name"
               />
             </label>
+            <button type="button" className="employee-search-submit" onClick={searchEmployees}>
+              Search
+            </button>
             {(employeeIdSearch || employeeNameSearch) && (
               <button
                 type="button"
                 onClick={() => {
                   setEmployeeIdSearch('');
                   setEmployeeNameSearch('');
+                  setEmployeeSearchActive(false);
+                  setEmployees([]);
                 }}
               >
                 Clear Search
@@ -2076,19 +2726,27 @@ function App() {
             <div className="employee-list">
               <div className="employee-list-head">
                 <span>ID</span>
+                <span>Emp Code</span>
                 <span>Employee</span>
                 <span>Designation</span>
                 <span>Role</span>
-                <span>Emp Code</span>
+                <span>Process</span>
+                <span>LOBName</span>
+                <span>Status</span>
                 <span>Action</span>
               </div>
               {filteredEmployees.map((employee) => (
                 <div className="employee-list-row" key={employee.id}>
                   <span>{employee.id}</span>
+                  <span>{employee.emp_code}</span>
                   <strong>{employee.emp_name}</strong>
                   <span>{employee.designation}</span>
                   <span>{employee.role}</span>
-                  <span>{employee.emp_code}</span>
+                  <span>{employee.process_name || '-'}</span>
+                  <span>{employee.lob_name || '-'}</span>
+                  <span className={`employee-status ${String(employee.status).toLowerCase()}`}>
+                    {employee.status || '-'}
+                  </span>
                   <button type="button" className="edit-btn" onClick={() => editEmployee(employee)}>
                     Edit
                   </button>
@@ -2174,6 +2832,7 @@ function App() {
             maxDetail="month"
             minDetail="year"
             showNeighboringMonth={false}
+            tileClassName={getCalendarTileClassName}
             tileContent={tileContent}
             onActiveStartDateChange={({ activeStartDate }) => {
               if (!activeStartDate) return;
@@ -2184,8 +2843,8 @@ function App() {
           />
           <div className="cal-legend">
             <span className="legend-item"><i className="ldot ld-present" /> Present (9h or more)</span>
-            <span className="legend-item"><i className="ldot ld-halfday" /> Half Day (4.5-9h)</span>
-            <span className="legend-item"><i className="ldot ld-absent" /> Absent/Short (&lt;4.5h)</span>
+            <span className="legend-item"><i className="ldot ld-halfday" /> Half Day (4-9h)</span>
+            <span className="legend-item"><i className="ldot ld-absent" /> Absent/Short (&lt;4h)</span>
             <span className="legend-item"><i className="ldot ld-holiday" /> Holiday</span>
           </div>
         </div>

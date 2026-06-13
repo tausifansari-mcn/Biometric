@@ -1,0 +1,58 @@
+Step 1 — Open PowerShell
+
+Press Win + R, type powershell, press Enter.
+
+Step 2 — Start the backend
+
+
+cd "C:\Users\MAS60358\Desktop\Biometric\attendance-frontend\backend"
+python -m uvicorn main:app --host 0.0.0.0 --port 8000
+You'll see:
+
+
+INFO: Application startup complete.
+INFO: Uvicorn running on http://0.0.0.0:8000
+Leave this window open. Do not close it.
+
+Step 3 — Open a second PowerShell window
+
+Press Win + R, type powershell, press Enter again (new window).
+
+Step 4 — Start the tunnel
+
+
+C:\Users\MAS60358\Desktop\Biometric\cloudflared.exe tunnel --url http://localhost:8000 --no-autoupdate
+After ~5 seconds you'll see a line like:
+
+
+https://some-words-here.trycloudflare.com
+Copy that URL.
+
+Step 5 — Update Vercel with the new URL
+
+Open a third PowerShell window:
+
+
+cd "C:\Users\MAS60358\Desktop\Biometric\attendance-frontend"
+
+# Remove old URL (press Y if asked)
+npx vercel env rm REACT_APP_API_BASE_URL production --yes
+
+# Add new URL (paste your tunnel URL when asked, then press Enter)
+npx vercel env add REACT_APP_API_BASE_URL production
+
+# Redeploy frontend
+npx vercel --prod
+Wait ~1 minute for Vercel to finish building.
+
+Step 6 — Test
+
+Open https://biometric-b9xd.vercel.app and log in.
+
+Summary of what stays open:
+
+Window	What's running
+Window 1	uvicorn (backend)
+Window 2	cloudflared (tunnel)
+Window 3	can be closed after deploy
+Close Window 1 or 2 → app stops working.

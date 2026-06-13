@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import App, { buildSummary } from './App';
+import App, { buildSummary, getCalendarTileClassName } from './App';
 
 jest.mock('react-calendar', () => (props) => (
   <div data-testid="calendar">
@@ -75,6 +75,25 @@ test('does not count Sundays, holidays, or future dates as absent', () => {
     halfDay: 1,
     absent: 4
   });
+});
+
+test('positions tooltips by actual weekday for every calendar month', () => {
+  expect(getCalendarTileClassName({
+    date: new Date(2026, 4, 1),
+    view: 'month'
+  })).toBe('calendar-column-5 calendar-tooltip-below');
+  expect(getCalendarTileClassName({
+    date: new Date(2026, 4, 2),
+    view: 'month'
+  })).toBe('calendar-column-6 calendar-tooltip-below');
+  expect(getCalendarTileClassName({
+    date: new Date(2026, 4, 8),
+    view: 'month'
+  })).toBe('calendar-column-5');
+  expect(getCalendarTileClassName({
+    date: new Date(2026, 5, 6),
+    view: 'month'
+  })).toBe('calendar-column-6 calendar-tooltip-below');
 });
 
 test('keeps calendar visible and restores employee details when profile API fails', async () => {
@@ -272,6 +291,48 @@ test('closes the profile popup when clicking outside it', async () => {
   });
 });
 
+test('profile shows Process and LOB only when AgentProcess matches the EmpCode', async () => {
+  localStorage.setItem('token', 'header.eyJzdWIiOiJNQVM2MDM1OCIsInJvbGUiOiJFbXBsb3llZSJ9.signature');
+  localStorage.setItem('attendanceProfileV2', JSON.stringify({
+    name: 'Test Employee',
+    emp_code: 'MAS60358',
+    designation: 'Software Engineer',
+    role: 'Employee'
+  }));
+
+  global.fetch = jest.fn((url) => {
+    if (url.includes('/api/profile')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          name: 'Test Employee',
+          emp_code: 'MAS60358',
+          designation: 'Software Engineer',
+          role: 'Employee',
+          is_manager: false,
+          process_name: 'Customer Support',
+          lob_name: 'Domestic Voice'
+        })
+      });
+    }
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve([])
+    });
+  });
+
+  render(<App />);
+  await screen.findByTestId('calendar');
+  fireEvent.click(screen.getByRole('button', { name: 'Open profile' }));
+
+  expect(await screen.findByText('Customer Support')).toBeInTheDocument();
+  expect(screen.getByText('Domestic Voice')).toBeInTheDocument();
+  expect(screen.getByText('Process')).toBeInTheDocument();
+  expect(screen.getByText('LOB')).toBeInTheDocument();
+});
+
 test('shows the superadmin employee form and submits an Employee role', async () => {
   localStorage.setItem('token', 'header.eyJzdWIiOiJNQVMwMDAwMSIsInJvbGUiOiJTdXBlckFkbWluIn0.signature');
   localStorage.setItem('attendanceProfileV2', JSON.stringify({
@@ -290,7 +351,10 @@ test('shows the superadmin employee form and submits an Employee role', async ()
           emp_name: 'New Employee',
           designation: 'Engineer',
           role: 'Employee',
-          emp_code: 'MAS10001'
+          emp_code: 'MAS10001',
+          process_name: 'Customer Support',
+          lob_name: 'Inbound',
+          status: 'Active'
         })
       });
     }
@@ -316,6 +380,8 @@ test('shows the superadmin employee form and submits an Employee role', async ()
   fireEvent.change(screen.getByLabelText('Employee Name'), { target: { value: 'New Employee' } });
   fireEvent.change(screen.getByLabelText('Designation'), { target: { value: 'Engineer' } });
   fireEvent.change(screen.getByLabelText('Employee Code'), { target: { value: 'mas10001' } });
+  fireEvent.change(screen.getByLabelText('Process'), { target: { value: 'Customer Support' } });
+  fireEvent.change(screen.getByLabelText('LOBName'), { target: { value: 'Inbound' } });
   fireEvent.click(screen.getByRole('button', { name: 'Add Employee' }));
 
   await waitFor(() => {
@@ -326,10 +392,81 @@ test('shows the superadmin employee form and submits an Employee role', async ()
     expect.objectContaining({
       method: 'POST',
       body: JSON.stringify({
+        emp_code: 'MAS10001',
         emp_name: 'New Employee',
         designation: 'Engineer',
         role: 'Employee',
-        emp_code: 'MAS10001'
+        process_name: 'Customer Support',
+        lob_name: 'Inbound',
+        status: 'Active'
+      })
+    })
+  );
+});
+
+test('superadmin can paste and add multiple employees in one batch', async () => {
+  localStorage.setItem('token', 'header.eyJzdWIiOiJNQVMwMDAwMSIsInJvbGUiOiJTdXBlckFkbWluIn0.signature');
+  localStorage.setItem('attendanceProfileV2', JSON.stringify({
+    name: 'Super Admin',
+    emp_code: 'MAS00001',
+    designation: 'Administrator',
+    role: 'SuperAdmin'
+  }));
+
+  global.fetch = jest.fn((url, options = {}) => {
+    if (url.endsWith('/api/employees/bulk') && options.method === 'POST') {
+      return Promise.resolve({
+        ok: true,
+        status: 201,
+        json: () => Promise.resolve({ created_count: 2, employees: [] })
+      });
+    }
+    if (url.endsWith('/api/employees')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) });
+    }
+    if (url.includes('/api/attendance') || url.includes('/api/holidays')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) });
+    }
+    return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) });
+  });
+
+  render(<App />);
+  fireEvent.click(screen.getByRole('button', { name: 'Open profile' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Manage Employee' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Add Bulk Employees' }));
+  fireEvent.change(screen.getByLabelText('Bulk Employee Rows'), {
+    target: {
+      value: [
+        'MAS10101, Riya Sharma, , Employee, Sales, Inbound, Active',
+        'MAS10102, Aman Verma, Executive, Admin, Support, Chat, Inactive'
+      ].join('\n')
+    }
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Add Bulk Employees' }));
+
+  expect(await screen.findByRole('status')).toHaveTextContent('2 employee(s) added successfully.');
+  expect(global.fetch).toHaveBeenCalledWith(
+    'http://localhost:8000/api/employees/bulk',
+    expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({
+        employees: [{
+          emp_code: 'MAS10101',
+          emp_name: 'Riya Sharma',
+          designation: 'Executive',
+          role: 'Employee',
+          process_name: 'Sales',
+          lob_name: 'Inbound',
+          status: 'Active'
+        }, {
+          emp_code: 'MAS10102',
+          emp_name: 'Aman Verma',
+          designation: 'Executive',
+          role: 'Admin',
+          process_name: 'Support',
+          lob_name: 'Chat',
+          status: 'Inactive'
+        }]
       })
     })
   );
@@ -433,7 +570,10 @@ test('superadmin can edit holidays and EmployeeDetails rows', async () => {
           emp_name: 'Existing Employee',
           designation: 'Senior Engineer',
           role: 'Employee',
-          emp_code: 'MAS10003'
+          emp_code: 'MAS10003',
+          process_name: 'Operations',
+          lob_name: 'Voice',
+          status: 'Active'
         })
       });
     }
@@ -446,7 +586,10 @@ test('superadmin can edit holidays and EmployeeDetails rows', async () => {
           emp_name: 'Existing Employee',
           designation: 'Engineer',
           role: 'Employee',
-          emp_code: 'MAS10003'
+          emp_code: 'MAS10003',
+          process_name: 'Operations',
+          lob_name: 'Voice',
+          status: 'Active'
         }])
       });
     }
@@ -485,6 +628,7 @@ test('superadmin can edit holidays and EmployeeDetails rows', async () => {
   fireEvent.change(screen.getByLabelText('Search by Name'), {
     target: { value: 'Existing Employee' }
   });
+  fireEvent.click(screen.getByRole('button', { name: 'Search' }));
   await screen.findByText('Existing Employee');
   fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
   fireEvent.change(screen.getByDisplayValue('Engineer'), {
@@ -498,10 +642,13 @@ test('superadmin can edit holidays and EmployeeDetails rows', async () => {
       expect.objectContaining({
         method: 'PUT',
         body: JSON.stringify({
+          emp_code: 'MAS10003',
           emp_name: 'Existing Employee',
           designation: 'Senior Engineer',
           role: 'Employee',
-          emp_code: 'MAS10003'
+          process_name: 'Operations',
+          lob_name: 'Voice',
+          status: 'Active'
         })
       })
     );
@@ -544,6 +691,7 @@ test('employee can open support and send a query to the assigned manager', async
           employee_name: 'Employee User',
           manager_emp_code: 'MAS20001',
           manager_name: 'Assigned Manager',
+          query_subject: 'Attendance correction',
           query_text: 'Please help with my attendance.',
           status: 'Open',
           image_name: null,
@@ -564,7 +712,10 @@ test('employee can open support and send a query to the assigned manager', async
   await screen.findByTestId('calendar');
   fireEvent.click(screen.getByRole('button', { name: 'Open profile' }));
   fireEvent.click(screen.getByRole('button', { name: 'Support' }));
-  fireEvent.change(screen.getByLabelText('Problem or query'), {
+  fireEvent.change(screen.getByLabelText('Query Subject'), {
+    target: { value: 'Attendance correction' }
+  });
+  fireEvent.change(screen.getByLabelText('Query'), {
     target: { value: 'Please help with my attendance.' }
   });
   fireEvent.click(screen.getByRole('button', { name: 'Send to Manager' }));
@@ -572,6 +723,7 @@ test('employee can open support and send a query to the assigned manager', async
   expect(await screen.findByText('Query sent to Assigned Manager.')).toBeInTheDocument();
   const postCall = global.fetch.mock.calls.find(([, options = {}]) => options.method === 'POST');
   expect(postCall[0]).toBe('http://localhost:8000/api/support-queries');
+  expect(postCall[1].body.get('query_subject')).toBe('Attendance correction');
   expect(postCall[1].body.get('query_text')).toBe('Please help with my attendance.');
 });
 
@@ -591,6 +743,7 @@ test('manager can open the query bucket and mark an employee query solved', asyn
     employee_name: 'Employee User',
     manager_emp_code: 'MAS60001',
     manager_name: 'Manager User',
+    query_subject: 'Missing punch',
     query_text: 'Please check my missing punch.',
     status: 'Open',
     image_name: null,
@@ -644,6 +797,140 @@ test('manager can open the query bucket and mark an employee query solved', asyn
 
   expect(await screen.findByText('Query marked as solved.')).toBeInTheDocument();
   expect(screen.getByText('Solved')).toBeInTheDocument();
+});
+
+test('manager profile shows notification counts for queries and password resets', async () => {
+  localStorage.setItem('token', 'header.eyJzdWIiOiJNQVM2MDAwMSIsInJvbGUiOiJNYW5hZ2VyIn0.signature');
+  localStorage.setItem('attendanceProfileV2', JSON.stringify({
+    name: 'Manager User',
+    emp_code: 'MAS60001',
+    designation: 'Operations',
+    role: 'Manager',
+    is_manager: true
+  }));
+
+  const openQueries = [
+    {
+      id: 20,
+      employee_emp_code: 'MAS10020',
+      employee_name: 'Employee 20',
+      manager_emp_code: 'MAS60001',
+      manager_name: 'Manager User',
+      query_subject: 'Missing punch',
+      query_text: 'Query 20',
+      status: 'Open',
+      image_name: null,
+      has_image: false,
+      created_at: '2026-06-13T10:00:00',
+      solved_at: null,
+      solved_by: null
+    },
+    {
+      id: 21,
+      employee_emp_code: 'MAS10021',
+      employee_name: 'Employee 21',
+      manager_emp_code: 'MAS60001',
+      manager_name: 'Manager User',
+      query_subject: 'Leave balance',
+      query_text: 'Query 21',
+      status: 'Open',
+      image_name: null,
+      has_image: false,
+      created_at: '2026-06-13T10:00:00',
+      solved_at: null,
+      solved_by: null
+    }
+  ];
+  const pendingReset = {
+    id: 41,
+    employee_emp_code: 'MAS10001',
+    employee_name: 'Employee User',
+    manager_emp_code: 'MAS60001',
+    manager_name: 'Manager User',
+    status: 'Pending',
+    created_at: '2026-06-13T10:00:00',
+    reviewed_at: null,
+    reviewed_by: null
+  };
+
+  global.fetch = jest.fn((url) => {
+    if (url.includes('/api/attendance') || url.includes('/api/holidays')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) });
+    }
+    if (url.includes('/api/profile')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          name: 'Manager User',
+          emp_code: 'MAS60001',
+          designation: 'Operations',
+          role: 'Manager',
+          is_manager: true
+        })
+      });
+    }
+    if (url.endsWith('/api/manager/support-queries')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(openQueries) });
+    }
+    if (url.endsWith('/api/manager/password-reset-requests')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve([pendingReset])
+      });
+    }
+    return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) });
+  });
+
+  render(<App />);
+  await screen.findByTestId('calendar');
+
+  const profileButton = screen.getByRole('button', { name: 'Open profile' });
+  await waitFor(() => {
+    expect(profileButton).toHaveAttribute('data-notification-count', '3');
+  });
+  expect(within(profileButton).getByText('3')).toHaveClass('profile-notification-badge');
+
+  await act(async () => {
+    fireEvent.click(profileButton);
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  const queryButton = screen.getByRole('button', { name: 'Query Bucket' });
+  const resetButton = screen.getByRole('button', { name: 'Reset Password Requests' });
+  expect(within(queryButton).getByText('2')).toHaveClass('task-notification-badge');
+  expect(within(resetButton).getByText('1')).toHaveClass('task-notification-badge');
+
+  await act(async () => {
+    fireEvent.click(queryButton);
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  const taskNav = screen.getByRole('complementary', { name: 'Profile tasks' });
+  expect(
+    within(within(taskNav).getByRole('button', { name: 'Query Bucket' })).getByText('2')
+  ).toHaveClass('task-notification-badge');
+  expect(
+    within(
+      within(taskNav).getByRole('button', { name: 'Reset Password Requests' })
+    ).getByText('1')
+  ).toHaveClass('task-notification-badge');
+
+  fireEvent.change(screen.getByLabelText('Search by Subject'), {
+    target: { value: 'leave' }
+  });
+  expect(screen.getByText('Leave balance')).toBeInTheDocument();
+  expect(screen.queryByText('Missing punch')).not.toBeInTheDocument();
+
+  fireEvent.change(screen.getByLabelText('Search by Subject'), {
+    target: { value: '' }
+  });
+  fireEvent.change(screen.getByLabelText('Search by Emp ID'), {
+    target: { value: 'mas10020' }
+  });
+  expect(screen.getByText('Missing punch')).toBeInTheDocument();
+  expect(screen.queryByText('Leave balance')).not.toBeInTheDocument();
 });
 
 test('manager can approve an assigned employee password reset request', async () => {
@@ -768,6 +1055,8 @@ test('employee profile shows Support only', async () => {
   expect(screen.queryByRole('button', { name: 'Query Bucket' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Add Holiday' })).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Support' })).toBeInTheDocument();
+  expect(screen.queryByText('Process')).not.toBeInTheDocument();
+  expect(screen.queryByText('LOB')).not.toBeInTheDocument();
 
   fireEvent.click(screen.getByRole('button', { name: 'Support' }));
   const taskNav = screen.getByRole('complementary', { name: 'Profile tasks' });
@@ -813,6 +1102,61 @@ test('admin profile shows Query Bucket, Add Holiday, and Support', async () => {
   expect(screen.getByRole('button', { name: 'Support' })).toBeInTheDocument();
 });
 
+test('superadmin attendance search can be expanded and hidden when needed', async () => {
+  localStorage.setItem('token', 'header.eyJzdWIiOiJNQVMwMDAwMSIsInJvbGUiOiJTdXBlckFkbWluIn0.signature');
+  localStorage.setItem('attendanceProfileV2', JSON.stringify({
+    name: 'Super Admin',
+    emp_code: 'MAS00001',
+    designation: 'Administrator',
+    role: 'SuperAdmin'
+  }));
+
+  global.fetch = jest.fn((url) => {
+    if (url.includes('/api/profile')) {
+      return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) });
+    }
+    if (url.includes('/api/attendance') && url.includes('search_emp_code=MAS10001')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve([{
+          UserID: 'MAS10001',
+          Name: 'Search Employee',
+          Designation: 'Engineer',
+          Role: 'Employee',
+          AttendanceDate: '2026-06-01',
+          WorkingMinutes: 600
+        }])
+      });
+    }
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve([])
+    });
+  });
+
+  render(<App />);
+  await screen.findByTestId('calendar');
+
+  expect(screen.queryByLabelText('Employee Code')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Find Employee' }));
+  fireEvent.change(screen.getByLabelText('Employee Code'), {
+    target: { value: 'mas10001' }
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Search Attendance' }));
+
+  expect(await screen.findByText('Showing attendance for Search Employee')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Hide Search' }));
+
+  expect(screen.queryByLabelText('Employee Code')).not.toBeInTheDocument();
+  expect(screen.getByText('Showing attendance for Search Employee')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Find Employee' })).toHaveAttribute(
+    'aria-expanded',
+    'false'
+  );
+});
+
 test('superadmin can search employees in Manage Employee', async () => {
   localStorage.setItem('token', 'header.eyJzdWIiOiJNQVMwMDAwMSIsInJvbGUiOiJTdXBlckFkbWluIn0.signature');
   localStorage.setItem('attendanceProfileV2', JSON.stringify({
@@ -826,13 +1170,19 @@ test('superadmin can search employees in Manage Employee', async () => {
     emp_name: 'Existing Employee',
     designation: 'Engineer',
     role: 'Employee',
-    emp_code: 'MAS10003'
+    emp_code: 'MAS10003',
+    process_name: 'Operations',
+    lob_name: 'Voice',
+    status: 'Active'
   }, {
     id: 4,
     emp_name: 'Second Employee',
     designation: 'Analyst',
     role: 'Employee',
-    emp_code: 'MAS10004'
+    emp_code: 'MAS10004',
+    process_name: 'Sales',
+    lob_name: 'Chat',
+    status: 'Inactive'
   }];
 
   global.fetch = jest.fn((url, options = {}) => {
@@ -843,7 +1193,7 @@ test('superadmin can search employees in Manage Employee', async () => {
         json: () => Promise.resolve({})
       });
     }
-    if (url.endsWith('/api/employees')) {
+    if (url.includes('/api/employees')) {
       return Promise.resolve({
         ok: true,
         status: 200,
@@ -878,12 +1228,14 @@ test('superadmin can search employees in Manage Employee', async () => {
   expect(screen.queryByText('Second Employee')).not.toBeInTheDocument();
 
   fireEvent.change(screen.getByLabelText('Search by ID'), { target: { value: '3' } });
-  expect(screen.getByText('Existing Employee')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+  expect(await screen.findByText('Existing Employee')).toBeInTheDocument();
   expect(screen.queryByText('Second Employee')).not.toBeInTheDocument();
 
   fireEvent.change(screen.getByLabelText('Search by ID'), { target: { value: '' } });
   fireEvent.change(screen.getByLabelText('Search by Name'), { target: { value: 'Existing' } });
-  expect(screen.getByText('Existing Employee')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+  expect(await screen.findByText('Existing Employee')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
 });
@@ -1325,4 +1677,233 @@ test('superadmin can paste comma-separated EmpCodes and assign selected employee
       })
     );
   });
+});
+
+test('superadmin can select and assign an entire Process to a manager', async () => {
+  localStorage.setItem('token', 'header.eyJzdWIiOiJNQVMwMDAwMSIsInJvbGUiOiJTdXBlckFkbWluIn0.signature');
+  localStorage.setItem('attendanceProfileV2', JSON.stringify({
+    name: 'Super Admin',
+    emp_code: 'MAS00001',
+    designation: 'Administrator',
+    role: 'SuperAdmin'
+  }));
+
+  const manager = {
+    id: 9,
+    manager_empcode: 'MAS20009',
+    manager_name: 'Process Manager',
+    process_name: 'Operations',
+    manager_unique_code: 'MGR-PROCESS-09'
+  };
+  const processEmployees = [{
+    id: 41,
+    emp_name: 'Process Employee One',
+    designation: 'Executive',
+    role: 'Employee',
+    emp_code: 'MAS10041',
+    assigned_manager_unique_code: null,
+    assigned_manager_name: null,
+    process_name: 'Bella-Vita Organic',
+    lob_name: 'Inbound'
+  }, {
+    id: 42,
+    emp_name: 'Process Employee Two',
+    designation: 'Executive',
+    role: 'Employee',
+    emp_code: 'MAS10042',
+    assigned_manager_unique_code: 'MGR-OTHER',
+    assigned_manager_name: 'Other Manager',
+    process_name: 'Bella-Vita Organic',
+    lob_name: 'Repeat Customer LOB'
+  }];
+  jest.spyOn(window, 'confirm').mockReturnValue(true);
+
+  global.fetch = jest.fn((url, options = {}) => {
+    if (url.includes('/api/profile')) {
+      return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) });
+    }
+    if (url.endsWith('/api/managers')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve([manager])
+      });
+    }
+    if (url.endsWith('/api/agent-process/options')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          processes: ['Bella-Vita Organic', 'Housing.com Owner'],
+          lobs: ['Inbound', 'Repeat Customer LOB'],
+          lobs_by_process: {
+            'Bella-Vita Organic': ['Inbound', 'Repeat Customer LOB'],
+            'Housing.com Owner': ['Owner']
+          }
+        })
+      });
+    }
+    if (url.includes('/api/managers/9/assignment-employees?assigned_only=true')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) });
+    }
+    if (url.includes('process_name=Bella-Vita+Organic')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(processEmployees)
+      });
+    }
+    if (
+      url.includes('/api/managers/9/assignment-employees?')
+      && !url.includes('assigned_only=true')
+    ) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) });
+    }
+    if (url.includes('/api/managers/9/assign-employees') && options.method === 'POST') {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          message: '2 employee(s) assigned',
+          updated_count: 2
+        })
+      });
+    }
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) });
+  });
+
+  render(<App />);
+  await screen.findByTestId('calendar');
+  fireEvent.click(screen.getByRole('button', { name: 'Open profile' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Add Manager' }));
+  await screen.findByText('Process Manager');
+  fireEvent.click(screen.getByRole('button', { name: 'Assign Employees' }));
+
+  await screen.findByRole('option', { name: 'Bella-Vita Organic' });
+  fireEvent.change(screen.getByLabelText('Process Name'), {
+    target: { value: 'Bella-Vita Organic' }
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Load & Select Whole Group' }));
+
+  expect(await screen.findByText('Process Employee One')).toBeInTheDocument();
+  expect(screen.getByText('Process Employee Two')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Assign Selected (2)' })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Assign Selected (2)' }));
+
+  expect(window.confirm).toHaveBeenCalledWith(
+    'Some selected employees already have a manager. Move them to this manager?'
+  );
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:8000/api/managers/9/assign-employees',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ employee_ids: [41, 42] })
+      })
+    );
+  });
+});
+
+test('LOB assignment requires a Process and only shows LOBs from that Process', async () => {
+  localStorage.setItem('token', 'header.eyJzdWIiOiJNQVMwMDAwMSIsInJvbGUiOiJTdXBlckFkbWluIn0.signature');
+  localStorage.setItem('attendanceProfileV2', JSON.stringify({
+    name: 'Super Admin',
+    emp_code: 'MAS00001',
+    designation: 'Administrator',
+    role: 'SuperAdmin'
+  }));
+
+  const manager = {
+    id: 10,
+    manager_empcode: 'MAS20010',
+    manager_name: 'LOB Manager',
+    process_name: 'Operations',
+    manager_unique_code: 'MGR-LOB-10'
+  };
+  const lobEmployees = [{
+    id: 51,
+    emp_name: 'Inbound Employee',
+    designation: 'Executive',
+    role: 'Employee',
+    emp_code: 'MAS10051',
+    assigned_manager_unique_code: null,
+    assigned_manager_name: null,
+    process_name: 'Bella-Vita Organic',
+    lob_name: 'Inbound'
+  }];
+
+  global.fetch = jest.fn((url) => {
+    if (url.includes('/api/profile')) {
+      return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) });
+    }
+    if (url.endsWith('/api/managers')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve([manager])
+      });
+    }
+    if (url.endsWith('/api/agent-process/options')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          processes: ['Bella-Vita Organic', 'Housing.com Owner'],
+          lobs: ['Inbound', 'Owner', 'Repeat Customer LOB'],
+          lobs_by_process: {
+            'Bella-Vita Organic': ['Inbound', 'Repeat Customer LOB'],
+            'Housing.com Owner': ['Owner']
+          }
+        })
+      });
+    }
+    if (url.includes('/api/managers/10/assignment-employees?assigned_only=true')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) });
+    }
+    if (
+      url.includes('process_name=Bella-Vita+Organic')
+      && url.includes('lob_name=Inbound')
+    ) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(lobEmployees)
+      });
+    }
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) });
+  });
+
+  render(<App />);
+  await screen.findByTestId('calendar');
+  fireEvent.click(screen.getByRole('button', { name: 'Open profile' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Add Manager' }));
+  await screen.findByText('LOB Manager');
+  fireEvent.click(screen.getByRole('button', { name: 'Assign Employees' }));
+
+  await screen.findByRole('option', { name: 'Bella-Vita Organic' });
+  fireEvent.change(screen.getByLabelText('Group Type'), { target: { value: 'lob' } });
+
+  expect(screen.getByLabelText('LOB Name')).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('Process Name'), {
+    target: { value: 'Bella-Vita Organic' }
+  });
+
+  expect(screen.getByLabelText('LOB Name')).toBeEnabled();
+  expect(screen.getByRole('option', { name: 'Inbound' })).toBeInTheDocument();
+  expect(screen.getByRole('option', { name: 'Repeat Customer LOB' })).toBeInTheDocument();
+  expect(screen.queryByRole('option', { name: 'Owner' })).not.toBeInTheDocument();
+
+  fireEvent.change(screen.getByLabelText('LOB Name'), { target: { value: 'Inbound' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Load & Select Whole Group' }));
+
+  expect(await screen.findByText('Inbound Employee')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Assign Selected (1)' })).toBeEnabled();
+  expect(global.fetch).toHaveBeenCalledWith(
+    expect.stringContaining('process_name=Bella-Vita+Organic'),
+    expect.any(Object)
+  );
+  expect(global.fetch).toHaveBeenCalledWith(
+    expect.stringContaining('lob_name=Inbound'),
+    expect.any(Object)
+  );
 });

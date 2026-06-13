@@ -142,6 +142,8 @@ class ProfileOut(BaseModel):
     name: str
     designation: str
     is_manager: bool
+    process_name: Optional[str] = None
+    lob_name: Optional[str] = None
 
 class HolidayCreate(BaseModel):
     holiday_date: str          # YYYY-MM-DD
@@ -154,20 +156,33 @@ class HolidayOut(BaseModel):
     created_by: Optional[str]
 
 class EmployeeCreate(BaseModel):
-    emp_name: str
-    designation: str
-    role: Literal["SuperAdmin", "Admin", "Employee"]
     emp_code: str
+    emp_name: str
+    designation: str = "Executive"
+    role: Literal["SuperAdmin", "Admin", "Employee"] = "Employee"
+    process_name: str
+    lob_name: str
+    status: Literal["Active", "Inactive"] = "Active"
 
 class EmployeeUpdate(EmployeeCreate):
     pass
 
 class EmployeeOut(BaseModel):
     id: int
+    emp_code: str
     emp_name: str
     designation: str
     role: str
-    emp_code: str
+    process_name: Optional[str] = None
+    lob_name: Optional[str] = None
+    status: Optional[str] = None
+
+class EmployeeBulkCreate(BaseModel):
+    employees: list[EmployeeCreate]
+
+class EmployeeBulkOut(BaseModel):
+    created_count: int
+    employees: list[EmployeeOut]
 
 class ManagerCreate(BaseModel):
     manager_empcode: str
@@ -187,6 +202,8 @@ class ManagerEmployeeOut(BaseModel):
     emp_code: str
     assigned_manager_unique_code: Optional[str]
     assigned_manager_name: Optional[str]
+    process_name: Optional[str] = None
+    lob_name: Optional[str] = None
 
 class EmployeeAssignmentRequest(BaseModel):
     employee_ids: list[int]
@@ -209,6 +226,7 @@ class SupportQueryOut(BaseModel):
     employee_name: str
     manager_emp_code: str
     manager_name: str
+    query_subject: str
     query_text: str
     status: str
     image_name: Optional[str]
@@ -259,6 +277,7 @@ def support_query_to_dict(row: dict) -> dict:
         "employee_name": row["EmployeeName"],
         "manager_emp_code": row["ManagerEmpCode"],
         "manager_name": row["ManagerName"],
+        "query_subject": row.get("QuerySubject") or "General Query",
         "query_text": row["QueryText"],
         "status": row["Status"],
         "image_name": row.get("ImageName"),
@@ -267,6 +286,135 @@ def support_query_to_dict(row: dict) -> dict:
         "solved_at": row.get("SolvedAt"),
         "solved_by": row.get("SolvedBy")
     }
+
+def ensure_support_query_subject_column(cursor):
+    cursor.execute("SHOW COLUMNS FROM SupportQueries LIKE 'QuerySubject'")
+    if not cursor.fetchone():
+        cursor.execute(
+            """
+            ALTER TABLE SupportQueries
+            ADD COLUMN QuerySubject VARCHAR(255) NOT NULL DEFAULT 'General Query'
+            AFTER ManagerUniqueCode
+            """
+        )
+
+def ensure_agent_process_table(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS AgentProcess (
+            ID BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            EmpCode VARCHAR(100) NOT NULL,
+            Name VARCHAR(255) NULL,
+            `Process` VARCHAR(255) NULL,
+            LOBName VARCHAR(255) NULL,
+            Status VARCHAR(100) NULL,
+            PRIMARY KEY (ID),
+            INDEX IX_AgentProcess_EmpCode (EmpCode)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """
+    )
+
+def get_agent_process_for_user(cursor, emp_code: str):
+    ensure_agent_process_table(cursor)
+    cursor.execute(
+        """
+        SELECT `Process`, LOBName
+        FROM AgentProcess
+        WHERE UPPER(EmpCode) = UPPER(%s)
+        ORDER BY ID DESC
+        LIMIT 1
+        """,
+        (emp_code,)
+    )
+    return cursor.fetchone()
+
+def normalize_employee(employee: EmployeeCreate) -> dict:
+    values = {
+        "emp_code": employee.emp_code.strip().upper(),
+        "emp_name": employee.emp_name.strip(),
+        "designation": employee.designation.strip() or "Executive",
+        "role": employee.role,
+        "process_name": employee.process_name.strip(),
+        "lob_name": employee.lob_name.strip(),
+        "status": employee.status
+    }
+    required_fields = (
+        values["emp_code"],
+        values["emp_name"],
+        values["process_name"],
+        values["lob_name"]
+    )
+    if not all(required_fields):
+        raise HTTPException(
+            status_code=400,
+            detail="Employee Code, Employee Name, Process, and LOBName are required"
+        )
+    return values
+
+def upsert_agent_process(cursor, employee: dict, previous_emp_code: Optional[str] = None):
+    ensure_agent_process_table(cursor)
+    emp_codes = [employee["emp_code"]]
+    if previous_emp_code and previous_emp_code.upper() != employee["emp_code"]:
+        emp_codes.append(previous_emp_code.upper())
+
+    placeholders = ",".join(["%s"] * len(emp_codes))
+    cursor.execute(
+        f"""
+        SELECT ID
+        FROM AgentProcess
+        WHERE UPPER(EmpCode) IN ({placeholders})
+        LIMIT 1
+        """,
+        tuple(emp_codes)
+    )
+    if cursor.fetchone():
+        cursor.execute(
+            f"""
+            UPDATE AgentProcess
+            SET EmpCode = %s, Name = %s, `Process` = %s, LOBName = %s, Status = %s
+            WHERE UPPER(EmpCode) IN ({placeholders})
+            """,
+            tuple([
+                employee["emp_code"],
+                employee["emp_name"],
+                employee["process_name"],
+                employee["lob_name"],
+                employee["status"],
+                *emp_codes
+            ])
+        )
+        return
+
+    cursor.execute(
+        """
+        INSERT INTO AgentProcess (EmpCode, Name, `Process`, LOBName, Status)
+        VALUES (%s, %s, %s, %s, %s)
+        """,
+        (
+            employee["emp_code"],
+            employee["emp_name"],
+            employee["process_name"],
+            employee["lob_name"],
+            employee["status"]
+        )
+    )
+
+def insert_employee_rows(cursor, employee: dict) -> dict:
+    cursor.execute(
+        """
+        INSERT INTO EmployeeDetails (EmpName, Designation, Role, EmpCode)
+        VALUES (%s, %s, %s, %s)
+        """,
+        (
+            employee["emp_name"],
+            employee["designation"],
+            employee["role"],
+            employee["emp_code"]
+        )
+    )
+    employee_id = cursor.lastrowid
+    upsert_agent_process(cursor, employee)
+    return {"id": employee_id, **employee}
 
 def ensure_password_reset_requests_table(cursor):
     cursor.execute(
@@ -695,6 +843,7 @@ def get_profile(current_user: dict = Depends(get_current_user)):
     )
     row = cursor.fetchone()
     manager = get_manager_for_user(cursor, current_user["emp_code"])
+    agent_process = get_agent_process_for_user(cursor, current_user["emp_code"])
     cursor.close()
     conn.close()
 
@@ -707,7 +856,9 @@ def get_profile(current_user: dict = Depends(get_current_user)):
             "role": "Manager",
             "name": manager.get("Manager_Name") or "Manager",
             "designation": manager.get("Process_name") or "Manager",
-            "is_manager": True
+            "is_manager": True,
+            "process_name": agent_process.get("Process") if agent_process else None,
+            "lob_name": agent_process.get("LOBName") if agent_process else None
         }
 
     return {
@@ -715,17 +866,25 @@ def get_profile(current_user: dict = Depends(get_current_user)):
         "role": row.get("Role") or current_user.get("role") or "User",
         "name": row.get("EmpName") or "Employee",
         "designation": row["Designation"],
-        "is_manager": manager is not None
+        "is_manager": manager is not None,
+        "process_name": agent_process.get("Process") if agent_process else None,
+        "lob_name": agent_process.get("LOBName") if agent_process else None
     }
 
 @app.post("/api/support-queries", response_model=SupportQueryOut, status_code=201)
 async def create_support_query(
+    query_subject: str = Form(...),
     query_text: str = Form(...),
     image: Optional[UploadFile] = File(None),
     current_user: dict = Depends(get_current_user)
 ):
     """Create a query for the employee's assigned manager."""
+    cleaned_subject = query_subject.strip()
     cleaned_query = query_text.strip()
+    if not cleaned_subject:
+        raise HTTPException(status_code=400, detail="Query subject is required")
+    if len(cleaned_subject) > 255:
+        raise HTTPException(status_code=400, detail="Query subject cannot exceed 255 characters")
     if not cleaned_query:
         raise HTTPException(status_code=400, detail="Query is required")
     if len(cleaned_query) > 5000:
@@ -746,6 +905,7 @@ async def create_support_query(
     conn = get_mysql_connection()
     cursor = conn.cursor(dictionary=True)
     try:
+        ensure_support_query_subject_column(cursor)
         cursor.execute(
             """
             SELECT
@@ -774,9 +934,9 @@ async def create_support_query(
             INSERT INTO SupportQueries (
                 EmployeeID, EmployeeEmpCode, EmployeeName,
                 ManagerID, ManagerEmpCode, ManagerName, ManagerUniqueCode,
-                QueryText, ImageData, ImageName, ImageMimeType
+                QuerySubject, QueryText, ImageData, ImageName, ImageMimeType
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 assignment["EmployeeID"],
@@ -786,6 +946,7 @@ async def create_support_query(
                 assignment["Manager_empcode"],
                 assignment["Manager_Name"],
                 assignment["managar_unique_code"],
+                cleaned_subject,
                 cleaned_query,
                 image_data,
                 image_name,
@@ -819,11 +980,12 @@ def get_employee_support_queries(current_user: dict = Depends(get_current_user))
     conn = get_mysql_connection()
     cursor = conn.cursor(dictionary=True)
     try:
+        ensure_support_query_subject_column(cursor)
         cursor.execute(
             """
             SELECT
                 ID, EmployeeEmpCode, EmployeeName, ManagerEmpCode, ManagerName,
-                QueryText, Status, ImageName, ImageData IS NOT NULL AS HasImage,
+                QuerySubject, QueryText, Status, ImageName, ImageData IS NOT NULL AS HasImage,
                 CreatedAt, SolvedAt, SolvedBy
             FROM SupportQueries
             WHERE UPPER(EmployeeEmpCode) = UPPER(%s)
@@ -842,13 +1004,14 @@ def get_manager_support_queries(current_user: dict = Depends(get_current_user)):
     conn = get_mysql_connection()
     cursor = conn.cursor(dictionary=True)
     try:
+        ensure_support_query_subject_column(cursor)
         role = str(current_user.get("role", "")).lower()
         if role in ("admin", "superadmin"):
             cursor.execute(
                 """
                 SELECT
                     ID, EmployeeEmpCode, EmployeeName, ManagerEmpCode, ManagerName,
-                    QueryText, Status, ImageName, ImageData IS NOT NULL AS HasImage,
+                    QuerySubject, QueryText, Status, ImageName, ImageData IS NOT NULL AS HasImage,
                     CreatedAt, SolvedAt, SolvedBy
                 FROM SupportQueries
                 ORDER BY CASE WHEN Status = 'Open' THEN 0 ELSE 1 END, CreatedAt DESC
@@ -862,7 +1025,7 @@ def get_manager_support_queries(current_user: dict = Depends(get_current_user)):
                 """
                 SELECT
                     ID, EmployeeEmpCode, EmployeeName, ManagerEmpCode, ManagerName,
-                    QueryText, Status, ImageName, ImageData IS NOT NULL AS HasImage,
+                    QuerySubject, QueryText, Status, ImageName, ImageData IS NOT NULL AS HasImage,
                     CreatedAt, SolvedAt, SolvedBy
                 FROM SupportQueries
                 WHERE ManagerID = %s
@@ -884,6 +1047,7 @@ def solve_support_query(
     conn = get_mysql_connection()
     cursor = conn.cursor(dictionary=True)
     try:
+        ensure_support_query_subject_column(cursor)
         role = str(current_user.get("role", "")).lower()
         if role in ("admin", "superadmin"):
             cursor.execute(
@@ -1146,6 +1310,56 @@ def delete_manager(manager_id: int, current_user: dict = Depends(get_current_use
         cursor.close()
         conn.close()
 
+@app.get("/api/agent-process/options")
+def get_agent_process_options(current_user: dict = Depends(get_current_user)):
+    """SuperAdmin only: return available Process and LOB values."""
+    if str(current_user.get("role", "")).lower() != "superadmin":
+        raise HTTPException(status_code=403, detail="SuperAdmin access required")
+
+    conn = get_mysql_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        ensure_agent_process_table(cursor)
+        cursor.execute(
+            """
+            SELECT DISTINCT `Process`
+            FROM AgentProcess
+            WHERE COALESCE(TRIM(`Process`), '') <> ''
+            ORDER BY `Process`
+            """
+        )
+        processes = [row["Process"] for row in cursor.fetchall()]
+        cursor.execute(
+            """
+            SELECT DISTINCT LOBName
+            FROM AgentProcess
+            WHERE COALESCE(TRIM(LOBName), '') <> ''
+            ORDER BY LOBName
+            """
+        )
+        lobs = [row["LOBName"] for row in cursor.fetchall()]
+        cursor.execute(
+            """
+            SELECT DISTINCT `Process`, LOBName
+            FROM AgentProcess
+            WHERE COALESCE(TRIM(`Process`), '') <> ''
+              AND COALESCE(TRIM(LOBName), '') <> ''
+            ORDER BY `Process`, LOBName
+            """
+        )
+        lobs_by_process = {}
+        for row in cursor.fetchall():
+            lobs_by_process.setdefault(row["Process"], []).append(row["LOBName"])
+
+        return {
+            "processes": processes,
+            "lobs": lobs,
+            "lobs_by_process": lobs_by_process
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
 @app.get(
     "/api/managers/{manager_id}/assignment-employees",
     response_model=list[ManagerEmployeeOut]
@@ -1156,7 +1370,9 @@ def get_manager_assignment_employees(
     search_id: Optional[str] = Query(None),
     search_name: Optional[str] = Query(None),
     emp_codes: Optional[str] = Query(None),
-    limit: int = Query(100, ge=1, le=200),
+    process_name: Optional[str] = Query(None),
+    lob_name: Optional[str] = Query(None),
+    limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     current_user: dict = Depends(get_current_user)
 ):
@@ -1167,6 +1383,7 @@ def get_manager_assignment_employees(
     conn = get_mysql_connection()
     cursor = conn.cursor(dictionary=True)
     try:
+        ensure_agent_process_table(cursor)
         cursor.execute(
             "SELECT ID, managar_unique_code FROM Managers WHERE ID = %s",
             (manager_id,)
@@ -1183,7 +1400,21 @@ def get_manager_assignment_employees(
                 COALESCE(e.Role, 'Employee') AS role,
                 e.EmpCode AS emp_code,
                 e.assign_manager_id AS assigned_manager_unique_code,
-                m.Manager_Name AS assigned_manager_name
+                m.Manager_Name AS assigned_manager_name,
+                (
+                    SELECT ap.`Process`
+                    FROM AgentProcess ap
+                    WHERE UPPER(ap.EmpCode) = UPPER(e.EmpCode)
+                    ORDER BY ap.ID DESC
+                    LIMIT 1
+                ) AS process_name,
+                (
+                    SELECT ap.LOBName
+                    FROM AgentProcess ap
+                    WHERE UPPER(ap.EmpCode) = UPPER(e.EmpCode)
+                    ORDER BY ap.ID DESC
+                    LIMIT 1
+                ) AS lob_name
             FROM EmployeeDetails e
             LEFT JOIN Managers m
                 ON e.assign_manager_id = m.managar_unique_code
@@ -1196,6 +1427,8 @@ def get_manager_assignment_employees(
         else:
             cleaned_id = (search_id or "").strip()
             cleaned_name = (search_name or "").strip()
+            cleaned_process = (process_name or "").strip()
+            cleaned_lob = (lob_name or "").strip()
             cleaned_codes = list(dict.fromkeys(
                 code.strip().upper()
                 for code in (emp_codes or "").split(",")
@@ -1219,6 +1452,37 @@ def get_manager_assignment_employees(
             if cleaned_name:
                 select_sql += " AND e.EmpName LIKE %s"
                 params.append(f"%{cleaned_name}%")
+            if cleaned_process and cleaned_lob:
+                select_sql += """
+                    AND EXISTS (
+                        SELECT 1
+                        FROM AgentProcess ap
+                        WHERE UPPER(ap.EmpCode) = UPPER(e.EmpCode)
+                          AND UPPER(ap.`Process`) = UPPER(%s)
+                          AND UPPER(ap.LOBName) = UPPER(%s)
+                    )
+                """
+                params.extend([cleaned_process, cleaned_lob])
+            elif cleaned_process:
+                select_sql += """
+                    AND EXISTS (
+                        SELECT 1
+                        FROM AgentProcess ap
+                        WHERE UPPER(ap.EmpCode) = UPPER(e.EmpCode)
+                          AND UPPER(ap.`Process`) = UPPER(%s)
+                    )
+                """
+                params.append(cleaned_process)
+            elif cleaned_lob:
+                select_sql += """
+                    AND EXISTS (
+                        SELECT 1
+                        FROM AgentProcess ap
+                        WHERE UPPER(ap.EmpCode) = UPPER(e.EmpCode)
+                          AND UPPER(ap.LOBName) = UPPER(%s)
+                    )
+                """
+                params.append(cleaned_lob)
 
         if assigned_only:
             cleaned_id = (search_id or "").strip()
@@ -1354,30 +1618,14 @@ def create_employee(
     if str(current_user.get("role", "")).lower() != "superadmin":
         raise HTTPException(status_code=403, detail="SuperAdmin access required")
 
-    emp_name = employee.emp_name.strip()
-    designation = employee.designation.strip()
-    emp_code = employee.emp_code.strip().upper()
-    if not emp_name or not designation or not emp_code:
-        raise HTTPException(status_code=400, detail="All employee fields are required")
+    normalized_employee = normalize_employee(employee)
 
     conn = get_mysql_connection()
     cursor = conn.cursor(dictionary=True)
     try:
-        cursor.execute(
-            """
-            INSERT INTO EmployeeDetails (EmpName, Designation, Role, EmpCode)
-            VALUES (%s, %s, %s, %s)
-            """,
-            (emp_name, designation, employee.role, emp_code)
-        )
+        created_employee = insert_employee_rows(cursor, normalized_employee)
         conn.commit()
-        return {
-            "id": cursor.lastrowid,
-            "emp_name": emp_name,
-            "designation": designation,
-            "role": employee.role,
-            "emp_code": emp_code
-        }
+        return created_employee
     except mysql.connector.IntegrityError:
         conn.rollback()
         raise HTTPException(status_code=409, detail="Employee code already exists")
@@ -1388,22 +1636,130 @@ def create_employee(
         cursor.close()
         conn.close()
 
-@app.get("/api/employees", response_model=list[EmployeeOut])
-def get_employees(current_user: dict = Depends(get_current_user)):
-    """List employees from EmployeeDetails."""
+@app.post("/api/employees/bulk", response_model=EmployeeBulkOut, status_code=201)
+def create_employees_bulk(
+    request: EmployeeBulkCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """SuperAdmin only: add multiple employees to both employee tables."""
     if str(current_user.get("role", "")).lower() != "superadmin":
         raise HTTPException(status_code=403, detail="SuperAdmin access required")
+    if not request.employees:
+        raise HTTPException(status_code=400, detail="Add at least one employee")
+    if len(request.employees) > 500:
+        raise HTTPException(status_code=400, detail="You can add a maximum of 500 employees at once")
+
+    normalized_employees = [normalize_employee(employee) for employee in request.employees]
+    emp_codes = [employee["emp_code"] for employee in normalized_employees]
+    seen_codes = set()
+    duplicate_codes = set()
+    for code in emp_codes:
+        if code in seen_codes:
+            duplicate_codes.add(code)
+        seen_codes.add(code)
+    duplicate_codes = sorted(duplicate_codes)
+    if duplicate_codes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Duplicate employee codes in bulk data: {', '.join(duplicate_codes)}"
+        )
 
     conn = get_mysql_connection()
     cursor = conn.cursor(dictionary=True)
     try:
+        placeholders = ",".join(["%s"] * len(emp_codes))
         cursor.execute(
-            """
-            SELECT ID, EmpName, Designation, Role, EmpCode
+            f"""
+            SELECT EmpCode
             FROM EmployeeDetails
-            ORDER BY EmpName, ID
-            """
+            WHERE UPPER(EmpCode) IN ({placeholders})
+            """,
+            tuple(emp_codes)
         )
+        existing_codes = sorted(row["EmpCode"] for row in cursor.fetchall())
+        if existing_codes:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Employee code already exists: {', '.join(existing_codes)}"
+            )
+
+        created_employees = [
+            insert_employee_rows(cursor, employee)
+            for employee in normalized_employees
+        ]
+        conn.commit()
+        return {
+            "created_count": len(created_employees),
+            "employees": created_employees
+        }
+    except HTTPException:
+        conn.rollback()
+        raise
+    except mysql.connector.IntegrityError:
+        conn.rollback()
+        raise HTTPException(status_code=409, detail="One or more employee codes already exist")
+    except MySQLError as error:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=f"Unable to add employees: {error}")
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.get("/api/employees", response_model=list[EmployeeOut])
+def get_employees(
+    search_id: Optional[str] = Query(None),
+    search_name: Optional[str] = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+    current_user: dict = Depends(get_current_user)
+):
+    """Search employees and include their latest AgentProcess details."""
+    if str(current_user.get("role", "")).lower() != "superadmin":
+        raise HTTPException(status_code=403, detail="SuperAdmin access required")
+
+    cleaned_id = (search_id or "").strip()
+    cleaned_name = (search_name or "").strip()
+    if not cleaned_id and not cleaned_name:
+        return []
+
+    conn = get_mysql_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        ensure_agent_process_table(cursor)
+        select_sql = """
+            SELECT
+                e.ID,
+                e.EmpName,
+                e.Designation,
+                e.Role,
+                e.EmpCode,
+                ap.`Process` AS ProcessName,
+                ap.LOBName,
+                ap.Status AS AgentStatus
+            FROM EmployeeDetails e
+            LEFT JOIN (
+                SELECT current_ap.*
+                FROM AgentProcess current_ap
+                INNER JOIN (
+                    SELECT EmpCode, MAX(ID) AS LatestID
+                    FROM AgentProcess
+                    GROUP BY EmpCode
+                ) latest_ap
+                    ON current_ap.ID = latest_ap.LatestID
+            ) ap
+                ON ap.EmpCode = e.EmpCode
+            WHERE 1 = 1
+        """
+        params = []
+        if cleaned_id:
+            select_sql += " AND (CAST(e.ID AS CHAR) LIKE %s OR e.EmpCode LIKE %s)"
+            id_pattern = f"%{cleaned_id}%"
+            params.extend([id_pattern, id_pattern])
+        if cleaned_name:
+            select_sql += " AND e.EmpName LIKE %s"
+            params.append(f"%{cleaned_name}%")
+        select_sql += " ORDER BY e.EmpName, e.ID LIMIT %s"
+        params.append(limit)
+        cursor.execute(select_sql, tuple(params))
         rows = cursor.fetchall()
         return [
             {
@@ -1411,7 +1767,10 @@ def get_employees(current_user: dict = Depends(get_current_user)):
                 "emp_name": row["EmpName"],
                 "designation": row["Designation"],
                 "role": row["Role"],
-                "emp_code": row["EmpCode"]
+                "emp_code": row["EmpCode"],
+                "process_name": row["ProcessName"],
+                "lob_name": row["LOBName"],
+                "status": row["AgentStatus"]
             }
             for row in rows
         ]
@@ -1429,35 +1788,40 @@ def update_employee(
     if str(current_user.get("role", "")).lower() != "superadmin":
         raise HTTPException(status_code=403, detail="SuperAdmin access required")
 
-    emp_name = employee.emp_name.strip()
-    designation = employee.designation.strip()
-    emp_code = employee.emp_code.strip().upper()
-    if not emp_name or not designation or not emp_code:
-        raise HTTPException(status_code=400, detail="All employee fields are required")
+    normalized_employee = normalize_employee(employee)
 
     conn = get_mysql_connection()
     cursor = conn.cursor(dictionary=True)
     try:
+        cursor.execute(
+            "SELECT EmpCode FROM EmployeeDetails WHERE ID = %s",
+            (employee_id,)
+        )
+        existing_employee = cursor.fetchone()
+        if not existing_employee:
+            raise HTTPException(status_code=404, detail="Employee not found")
+
         cursor.execute(
             """
             UPDATE EmployeeDetails
             SET EmpName = %s, Designation = %s, Role = %s, EmpCode = %s
             WHERE ID = %s
             """,
-            (emp_name, designation, employee.role, emp_code, employee_id)
+            (
+                normalized_employee["emp_name"],
+                normalized_employee["designation"],
+                normalized_employee["role"],
+                normalized_employee["emp_code"],
+                employee_id
+            )
         )
-        if cursor.rowcount == 0:
-            cursor.execute("SELECT ID FROM EmployeeDetails WHERE ID = %s", (employee_id,))
-            if not cursor.fetchone():
-                raise HTTPException(status_code=404, detail="Employee not found")
+        upsert_agent_process(
+            cursor,
+            normalized_employee,
+            existing_employee["EmpCode"]
+        )
         conn.commit()
-        return {
-            "id": employee_id,
-            "emp_name": emp_name,
-            "designation": designation,
-            "role": employee.role,
-            "emp_code": emp_code
-        }
+        return {"id": employee_id, **normalized_employee}
     except mysql.connector.IntegrityError:
         conn.rollback()
         raise HTTPException(status_code=409, detail="Employee code already exists")

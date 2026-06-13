@@ -1,0 +1,430 @@
+UserID,Name,Process Name,LOB,ProcessCode
+MAS48228,ASHISH THOMAS GEORGE,Birla Nu,Outbound,BN01
+MAS49273,Priyanka Gupta,Birla Nu,Outbound,BN01
+MAS49564,Deepa yadav,Exicom,Inbound,EM02
+MAS49719,Sandeep Singh bisht,Housing.com Owner,Owner,HO03
+MAS49862,Sameer Rawat,Housing.com Owner,Owner,HO03
+MAS50154,Neetu Fartyal,Back Office,Back Office,BO04
+MAS50244,Richa rathore,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS50298,vivek Ojha,Housing.com Owner,Owner,HO03
+MAS50372,Mohd kasim,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS50411,Tushar kumar,Bella-Vita Organic,Chat,BV05
+MAS50759,Sameer,Housing Premium,Premium,HP06
+MAS50846,Chanchal Sharma,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS51127,Dhananjay  Pratap,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS51303,Shubham Pandey,Bella-Vita Organic,Chat,BV05
+MAS51997,KAJAL,Housing.com Owner,Owner,HO03
+MAS52098,TANUSHREE PRADHAN,DU Digital,Inbound,DU07
+MAS52327,ROHAN KUMAR,GNC,Abandon Cart,GN08
+MAS52468,REKHA SHARMA,Bella-Vita Organic,0,BV05
+MAS52496,KRIPA SHANKAR PANDEY,Exicom,Inbound,EM02
+MAS52734,REKHA BISHT,Exicom,Inbound,EM02
+MAS53186,PRIYANSHU SHARMA,Exicom,Inbound,EM02
+MAS53279,Suraj,Bella-Vita Organic,Chat,BV05
+MAS53355,ARTI CHAUHAN,VST,Outbound,VS08
+MAS53558,Jyoti,Housing Premium,Premium,HP06
+MAS53598,DEEPANSHU SHARMA,Housing Premium,Premium,HP06
+MAS53603,Nitin Kumar,GNC,Abandon Cart,GN08
+MAS53743,Akshay,Bella-Vita Organic,Chat,BV05
+MAS54531,SUHAIL SAIFI,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS54666,ASIF SAIFI,Exicom,Inbound,EM02
+MAS54705,Rahul,GNC,Inbound,GN08
+MAS54872,KM CHARU BHARADWAJ,Bella-Vita Organic,Chat,BV05
+MAS55180,MANOJ KUAMR SINGH,Bella-Vita Organic,Chat,BV05
+MAS55322,MOHD FAIZAN,Housing.com Owner,Owner,HO03
+MAS55622,Rohan,GNC,Abandon Cart,GN08
+MAS55804,Divya,Housing.com Owner,Owner,HO03
+MAS55808,KM Rubi,Housing.com Owner,Owner,HO03
+MAS55809,MEGHA CHAUHAN,Housing.com Owner,Owner,HO03
+MAS55838,Manish,AW,VKYC,AW08
+MAS56101,Kanishka Sharma,Clovia,Email,CL07
+MAS56107,Anshika Kotnala,Neeman's,Non Voice,HP06
+MAS56168,KRISHAN KUMAR,Housing.com Owner,Owner,HO03
+MAS56293,DEEPAK VASHISHT,Housing.com Owner,Owner,HO03
+MAS56873,AKASH SINGH,GNC,Inbound,GN08
+MAS56876,BUSHRA,AW,Onboarded,AW08
+MAS56896,Munna Kumar,GNC,Chat,GN08
+MAS56922,TANNU RATHORE,GNC,Chat,GN08
+MAS56930,AKANKSHA PASAWAN,Clovia,Outbound,CL07
+MAS56946,KHUSHI,Bella-Vita Organic,Chat,BV05
+MAS57009,Nikhil  Giri,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS57019,Beenu,VST,Outbound,VS08
+MAS57024,M GAURAV RAW,Bella-Vita Organic,Inbound,BV05
+MAS57105,Akash Bharti,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS57113,Atul chaudhary,Bella-Vita Organic,Chat,BV05
+MAS57208,Sagar,Bella-Vita Organic,Chat,BV05
+MAS57211,BIDESH SARKAR,Bella-Vita Organic,Inbound,BV05
+MAS57213,Sanjeet,Bella-Vita Organic,Chat,BV05
+MAS57315,JATIN NAINWAL,AW,Onboarded,AW08
+MAS57413,SACHIN,Neeman's,Abandon Cart,HP06
+MAS57478,MEGHA BISHT,Bella-Vita Organic,Abandon Cart,BV05
+MAS57524,RAJ MEHRA,Neeman's,Abandon Cart,HP06
+MAS57576,Yatika,Neeman's,Inbound,HP06
+MAS57627,ARBAZ KHAN,Housing Premium,Premium,HP06
+MAS57695,RASHMI,Clovia,Chat,CL07
+MAS57843,MOHAMMAD FAIZAN,GNC,Inbound,GN08
+MAS58007,Babita Thakur,Housing Premium,Premium,HP06
+MAS58111,GUNJAN SHARMA,Bella-Vita Organic,Chat,BV05
+MAS58479,PREETI,GNC,Abandon Cart,GN08
+MAS58530,Amit Yadav,Solveesy,Outbound,SV07
+MAS58591,Anshu,AW,Inbound/VKYC,AW08
+MAS58595,Kumkum,AW,Inbound,AW08
+MAS58621,Rinki Sharma,Bella-Vita Organic,Chat,BV05
+MAS58640,Anshu Sukhla,GNC,Abandon Cart,GN08
+MAS58754,Preeti,Housing Premium,Premium,HP06
+MAS58767,CHHAVI GUPTA,Wryze,Outbound,WR07
+MAS58878,HARSH DASILA,Housing.com Owner,Owner,HO03
+MAS58894,KUSHAL UPADHYAY,Housing Premium,Premium,HP06
+MAS58945,PRATIKSHA,GNC,Abandon Cart,GN08
+MAS58974,Surjeet Kaur,Bella-Vita Organic,Inbound,BV05
+MAS59006,ADITYA KUMAR SINGH,AW,Inbound/VKYC,AW08
+MAS59014,RITU,AW,Onboarded,AW08
+Mas59063,Shivani Singh,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS59163,Saurabh Singh,Bella-Vita Organic,Chat,BV05
+MAS59165,Tanisha,Neeman's,Abandon Cart,HP06
+MAS59169,Riya Tomer,Neeman's,Social Media,HP06
+MAS59253,VIJAY,Birla Nu,Outbound,BN01
+MAS59258,PRIYA,Clovia,Outbound,CL07
+MAS59259,JAGJEET KAUR,Clovia,Chat,CL07
+MAS59332,MALVIKA PANDEY,Clovia,Email,CL07
+MAS59343,DOLLY THAKUR,GNC,Abandon Cart,GN08
+MAS59363,JANVI,Bella-Vita Organic,Abandon Cart,BV05
+MAS59365,JAMAL AHAMAD,Neeman's,Chat,HP06
+MAS59369,ARUSHI,Bella-Vita Organic,Inbound,BV05
+MAS59371,NIKHIL KUMAR PANDEY,Solveesy,Outbound,SV07
+MAS59447,SHAIK MOHAMMAD NAZEEM,Birla Nu,Outbound,BN01
+MAS59480,NIKHIL SHARMA,Bella-Vita Organic,Chat,BV05
+MAS59483,MOHD DANISH,Bella-Vita Organic,Chat,BV05
+MAS59521,NAME SINGH,Wryze,Outbound,WR07
+MAS59575,RISHAB SOLANKI,Neeman's,Chat,HP06
+MAS59576,NISHA KUMARI,Neeman's,Email,HP06
+MAS59607,JITESH SHARMA,Neeman's,Chat,HP06
+MAS59650,ISHA NEGI,Housing Premium,Premium,HP06
+MAS59679,GARGI SHARMA,Clovia,Inbound,CL07
+MAS59771,ANUJ KUMAR,Neeman's,Abandon Cart,HP06
+MAS59804,SHUBHAM YADAV,Bella-Vita Organic,Inbound,BV05
+MAS59809,LAKSHMAN KUMAR BIND,Housing.com Owner,Owner,HO03
+MAS59813,Priyanka,DU Digital,Inbound,DU07
+MAS59849,SUNIL KUMAR,AW,Onboarded,AW08
+MAS59850,KAUSTUBH KUMAR PANDEY,AW,Inbound/VKYC,AW08
+MAS59962,SNEHA PANDEY,Neeman's,Inbound,HP06
+MAS59967,PUNEET,Neeman's,Inbound,HP06
+MAS59982,Aashima Kapila,Clovia,Inbound,CL07
+MAS60006,ANKIT KUMAR VASHISHTH,Housing.com Owner,Owner,HO03
+MAS60135,Akansh Singh,DU Digital,Inbound,DU07
+MAS60141,YASHMER SINGH SOAM,Bella-Vita Organic,Chat,BV05
+MAS60142,ANURAG YADAV,Bella-Vita Organic,Chat,BV05
+MAS60143,UJJWAL SRIVASTAVA,Bella-Vita Organic,Chat,BV05
+MAS60144,AMIT TIWARI,Bella-Vita Organic,Chat,BV05
+MAS60177,HRITIK GAUTAM,Housing Premium,Premium,HP06
+MAS60186,Kalash Bhargav,DU Digital,Outbound,DU07
+MAS60222,HIMANSHI,Housing Premium,Premium,HP06
+MAS60223,UJJWAL AWASTHI,Neeman's,Inbound,HP06
+MAS60224,MANIK TUTEJA,Neeman's,Inbound,HP06
+MAS60227,Shamsher,Bella-Vita Organic,Chat,BV05
+MAS60246,MALLIKA DEKA,Housing Premium,Premium,HP06
+MAS60298,PRATIKSHA SHARMA,-,-,#N/A
+MAS60367,KHUSHI,Housing Premium,Premium,HP06
+MAS60382,Vikram Singh,Housing Premium,Premium,HP06
+MAS60386,Chandresh,Neeman's,Inbound,HP06
+MAS60417,HIMANSHU SINGH,Housing.com Owner,Owner,HO03
+MAS60428,ASHISH EKKA,Bella-Vita Organic,Inbound,BV05
+MAS60429,TANISHA,Bella-Vita Organic,Inbound,BV05
+MAS60436,CHHAVI KAPOOR,Clovia,Inbound,CL07
+MAS60486,NIBHA RANI,Neeman's,Inbound,HP06
+MAS60487,PRAGATI BISHT,DU Digital,Inbound,DU07
+MAS60535,Vansh Srivastava,Housing.com Owner,Owner,HO03
+MAS60537,Divyanshi Panchal,Housing.com Owner,Owner,HO03
+MAS60551,Sheetal Raturi,Neeman's,Abandon Cart,HP06
+MAS60557,Akash Shah,Exicom,Inbound,EM02
+MAS60564,Rashmi Rajpoot,Bella-Vita Organic,Email,BV05
+MAS60581,AKANKSHA,Clovia,Inbound,CL07
+MAS60584,RIYA,Clovia,Inbound,CL07
+MAS60586,SRISHTI VERMA,Clovia,Inbound,CL07
+MAS60629,ANIKET SRIVASTAV,Housing.com Owner,Owner,HO03
+MAS60641,SHAIKH EHTESHAM IBRAHIM,Neeman's,Abandon Cart,HP06
+MAS60644,Rahil Hasan,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS60682,Prachi,Bella-Vita Organic,Inbound,BV05
+MAS60691,Shreya,GNC,Inbound,GN08
+MAS60701,KUMKUM KUMARI,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS60702,MOHD RIHAN,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS60705,SAHIL PANCHAL,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS60729,Harshit Yadav,Housing Premium,Premium,HP06
+MAS60740,PARUL,GNC,Abandon Cart,GN08
+MAS60770,SUNNY,Bella-Vita Organic,Chat,BV05
+MAS60772,VIKASH GAURAV,Bella-Vita Organic,Email,BV05
+MAS60773,NISHA,GNC,Email,GN08
+MAS60774,ANJALI GOLA,GNC,Email,GN08
+MAS60775,ANUBHAV SHARMA,GNC,Email,GN08
+MAS60776,MOHD ALAM,Neeman's,Inbound,HP06
+MAS60777,SURBHI RAWAT,Neeman's,Abandon Cart,HP06
+MAS60815,ABHISHEK PANDEY,Solveesy,Outbound,SV07
+MAS60821,Piyush SHARMA,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS60834,Manish Saini,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS60840,PAWAN KUMAR,Housing.com Owner,Owner,HO03
+MAS60867,ANJUM,Neeman's,Abandon Cart,HP06
+MAS60869,Vanshika  Singh,GNC,Chat,GN08
+MAS60870,Neeraj Kumar,GNC,Chat,GN08
+MAS60884,POONAM,Wryze,Outbound,WR07
+MAS60933,NISHUGAUTAM,Housing Premium,Premium,HP06
+MAS61010,Ansra Ameen,Bella-Vita Organic,Chat,BV05
+MAS61011,Sonal,GNC,Abandon Cart,GN08
+MAS61022,Roshni Bharti,Housing.com Owner,Owner,HO03
+MAS61062,MINASHI PATRICK,Neeman's,Inbound,HP06
+MAS61066,HARESH KUMAR,Housing Premium,Premium,HP06
+MAS61068,ABHINAV SRIVASTAVA,Housing Premium,Premium,HP06
+MAS61096,NIKKY,Housing Premium,Premium,HP06
+MAS61097,TANISHKA AGRAWAL,Housing.com Owner,Owner,HO03
+MAS61112,AKANSHA MISHRA,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS61152,RAJ KUMAR,Bella-Vita Organic,Inbound,BV05
+MAS61153,Prince kumar,Bella-Vita Organic,Inbound,BV05
+MAS61154,SATENDRA KUMAR,Bella-Vita Organic,Chat,BV05
+MAS61174,ABHISHEK SAINI,Birla Nu,Outbound,BN01
+MAS61201,ABHISHEK,AW,Onboarded,AW08
+MAS61202,Vikas,Birla Nu,Outbound,BN01
+MAS61268,ASHUTOSH VISHWAKARMA,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS61271,Naveen,Housing Premium,Premium,HP06
+MAS61272,Priyanka Bisht,Housing Premium,Premium,HP06
+MAS61274,Neha Thakur,LP,Front desk,LP08
+MAS61275,VINEET KUMARI,Housing Premium,Premium,HP06
+MAS61304,Nadeem Ansari,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS61338,SOUVIK BISWAL,DU Digital,Outbound,DU07
+MAS61379,MAMTA,Neeman's,Abandon Cart,HP06
+MAS61389,Aman Tyagi,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS61390,Manvi Kaushik,-,-,#N/A
+MAS61392,Nandita Sharma,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS61393,Dikshita Gupta,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS61396,NIHARIKA GAUR,Neeman's,Inbound,HP06
+MAS61400,MD Anwar Ali,Bella-Vita Organic,Inbound,BV05
+MAS61401,Bharti,Bella-Vita Organic,Inbound,BV05
+MAS61422,KAJAL,Housing.com Owner,Owner,HO03
+MAS61431,ARUNENDRA TRIPATHI,Housing.com Owner,Owner,HO03
+MAS61433,AKASH SINGH,Housing.com Owner,Owner,HO03
+MAS61449,PRIYANSHU KUMAR,Housing.com Owner,Owner,HO03
+MAS61454,JYOTSANA,LP,Feedback Calling,LP08
+MAS61455,DRISTY SHARMA,LP,Feedback Calling,LP08
+MAS61456,SANYA MASSEY,LP,Feedback Calling,LP08
+MAS61469,Manjari Agrawal,DU Digital,Inbound,DU07
+MAS61474,MOHAMMAD SAAD,Bella-Vita Organic,Chat,BV05
+MAS61475,KAJAL CHAUHAN,Bella-Vita Organic,Chat,BV05
+MAS61476,NANDU KUMAR,Bella-Vita Organic,Chat,BV05
+MAS61477,ANISHKA SHARMA,AW,Onboarded,AW08
+MAS61501,GAURI KUMARI,LP,Feedback Calling,LP08
+MAS61502,RASHMI,LP,Feedback Calling,LP08
+MAS61507,Bhumika Jadon,Neeman's,Abandon Cart,HP06
+MAS61510,Videsh kumar,Housing.com Owner,Owner,HO03
+MAS61549,VISHNU,GNC,Abandon Cart,GN08
+MAS61550,SUMIT KUMAR,GNC,Abandon Cart,GN08
+MAS61551,AYAN,GNC,Abandon Cart,GN08
+MAS61553,JAYJEET,GNC,Abandon Cart,GN08
+MAS61561,NEELU SINGH,Viega,Inbound,VG07
+MAS61607,AFTAB ALI,GNC,Abandon Cart,GN08
+MAS61609,SAZZAD ALI,AW,0,AW08
+MAS61610,AKASH SHARMA,GNC,Chat,GN08
+MAS61634,NEHA,Housing.com Owner,Owner,HO03
+MAS61673,Gaurav,Birla Nu,Outbound,BN01
+MAS61681,Vivek Kumar,GNC,Chat,GN08
+MAS61683,Deepanshu Yadav,GNC,Email,GN08
+MAS61684,VIJAY YADAV,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS61685,ASHWIN PATHAK,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS61707,SWATI RAI,GNC,PP,GN08
+MAS61710,ABHAY MISHRA,Bella-Vita Organic,Chat,BV05
+MAS61715,AYUSHMANN CHAUHAN,GNC,Abandon Cart,GN08
+MAS61716,DEVANSH SINGH,GNC,Abandon Cart,GN08
+MAS61762,GOPAL,Housing.com Owner,Owner,HO03
+MAS61763,MOHD BILAL,Housing.com Owner,Owner,HO03
+MAS61765,SHREYA TIWARI,Housing.com Owner,Owner,HO03
+MAS61768,KAPIL KUMAR,Housing Premium,Premium,HP06
+MAS61776,YOGENDRA VISHWAKARMA,AW,Onboarded,AW08
+MAS61802,SARAN RAJ,Birla Nu,Outbound,BN01
+MAS61825,NEHA LAWANIYA,VST,Outbound,VS08
+MAS61826,YASH RAJ CHAUHAN,Bella-Vita Organic,Inbound,BV05
+MAS61827,NISHANT SINGH,Neeman's,Chat,HP06
+MAS61828,SHOBHIT PAL,Housing.com Owner,Owner,HO03
+MAS61829,SWATI,Bella-Vita Organic,Email,BV05
+MAS61843,NEHA SAHANI,Housing.com Owner,Owner,HO03
+MAS61850,Rahul Kumar,DU Digital,Inbound,DU07
+MAS61852,Tanu Bhardwaj,LP,Feedback Calling,LP08
+MAS61853,TANISHQ SINGH,AW,VKYC,AW08
+MAS61883,PRIYANKA BISHT,LP,Feedback Calling,LP08
+MAS61915,Shreya Mishra,Clovia,Inbound,CL07
+MAS61934,TANU RANA,Bella-Vita Organic,Abandon Cart,BV05
+MAS61939,Agrim,Bella-Vita Organic,Abandon Cart,BV05
+MAS61941,Deepak Sharma,Bella-Vita Organic,Abandon Cart,BV05
+MAS61943,SURAJ,Housing.com Owner,Owner,HO03
+MAS61944,ABHISHEK PAL,Bella-Vita Organic,Abandon Cart,BV05
+MAS61950,YOGYATA KUMARI,Housing.com Owner,Owner,HO03
+MAS61953,JYOTI SHARMA,Housing.com Owner,Owner,HO03
+MAS61955,NIDHI SINGH RAJPUT,Housing.com Owner,Owner,HO03
+MAS61959,SARVESH MANDAL,Housing.com Owner,Owner,HO03
+MAS61981,DEVESH KUMAR,Neeman's,Inbound,HP06
+MAS61983,KANAK RANA,Neeman's,Inbound,HP06
+MAS61984,JATIN SINGH NEGI,Neeman's,Inbound,HP06
+MAS61985,ISHA JHA,Bella-Vita Organic,Inbound,BV05
+MAS62005,Sameer Uddin,Housing.com Owner,Owner,HO03
+MAS62013,SACHIN,Housing Premium,Premium,HP06
+MAS62014,ARPIT GANGWAR,Housing Premium,Premium,HP06
+MAS62015,ABHAY JADAUN,Housing Premium,Premium,HP06
+MAS62016,HRITIK SINGH,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS62046,SADAT UZAIR ALI,Bella-Vita Organic,Chat,BV05
+MAS62067,SHALU ARYA,GNC,Abandon Cart,GN08
+MAS62068,AASHISH GAUTAM,Housing.com Owner,Owner,HO03
+MAS62073,Priyanka Singh,Solveesy,Outbound,SV07
+MAS62074,KUNAL SHARMA,AW,Onboarded,AW08
+MAS62105,SHUBHA JAIN SHARMA,Clovia,Inbound,CL07
+MAS62106,RAJAN SINGH,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS62107,OM SACHAN,Neeman's,Abandon Cart,HP06
+MAS62109,CHANDRAKANTA,Neeman's,Abandon Cart,HP06
+MAS62122,Bilal,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS62123,Aman Saraswat,Housing.com Owner,Owner,HO03
+MAS62124,AKASH RATHOR,Housing.com Owner,Owner,HO03
+MAS62125,JEETU,Housing.com Owner,Owner,HO03
+MAS62126,SAURABH DUBEY,Housing.com Owner,Owner,HO03
+MAS62129,AFTAB AHAMAD,Housing.com Owner,Owner,HO03
+MAS62131,SALMANI ILMA,Housing.com Owner,Owner,HO03
+MAS62132,RADHIKA SHARMA,Bella-Vita Organic,Abandon Cart,BV05
+MAS62133,ANKIT KUMAR,Bella-Vita Organic,Abandon Cart,BV05
+MAS62134,KAYENAT,Bella-Vita Organic,Abandon Cart,BV05
+MAS62144,SHYAM RUHELA,Bella-Vita Organic,Abandon Cart,BV05
+MAS62145,GUNGUN TYAGI,VST,Outbound,VS08
+MAS62157,KHUSHBOO,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS62159,DUSHYANT RAJPUT,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS62160,SHIVAM MISHRA,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS62161,GAURAV CHOPRA,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS62201,SABA,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS62203,SOHAIL KHAN,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS62206,ARCHANA VERMA,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS62231,RITESH KUMAR,Housing.com Owner,Owner,HO03
+MAS62232,YASH SHARMA,Housing.com Owner,Owner,HO03
+MAS62233,NAZREEN PARVIN,-,-,#N/A
+MAS62236,MONALISA MASANTA,Birla Nu,Outbound,BN01
+MAS62241,NIDHI SINHA,Clovia,Inbound,CL07
+MAS62248,HARSH KUMAR,Birla Nu,Outbound,BN01
+MAS62280,G Sanjay rao,LP,Regional Language,LP08
+MAS62281,SRINU NAYAK VADITHE,LP,Regional Language,LP08
+MAS62282,HIMANSHU KUMAR,Housing.com Owner,Owner,HO03
+MAS62283,Geeta,LP,Regional Language,LP08
+MAS62291,MOHAMMAD TAUHEED MAZHAR,Bella-Vita Organic,Email,BV05
+MAS62293,Krishna Singh,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS62295,ROHAN SAINI,Bella-Vita Organic,Abandon Cart,BV05
+MAS62298,MEENAKSHI,Bella-Vita Organic,Abandon Cart,BV05
+MAS62299,KARTIK SINGH,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS62300,PREM KUMAR,Bella-Vita Organic,Email,BV05
+MAS62312,UMA KUMARI,Housing.com Owner,Owner,HO03
+MAS62313,HARSH KUMAR,Housing.com Owner,Owner,HO03
+MAS62314,VISHAL SINGH,Housing.com Owner,Owner,HO03
+MAS62316,DIGAMBAR,Dalmia Cement,Outbound,HP06
+MAS62318,ANIL MALIK,Dalmia Cement,Outbound,HP06
+MAS62336,PEDDINTI PRUDHVIRAJU,LP,Regional Language,LP08
+MAS62381,MANSI VAISH,DU Digital,Inbound,DU07
+MAS62382,SHARIQ SHAIKH,Housing.com Owner,Owner,HO03
+MAS62387,ANKIT YADAV,-,-,#N/A
+MAS62393,Ankita Yadav,Viega,Inbound,VG07
+MAS62394,Sujeet,Dalmia Cement,Outbound,HP06
+MAS62396,KRISHNA MISHRA,Neeman's,Inbound,HP06
+MAS62397,NEHA ANSARI,Neeman's,Abandon Cart,HP06
+MAS62398,VAIBHAV SHARMA,Neeman's,Abandon Cart,HP06
+MAS62429,Kunal Dobhal,AW,Onboarded,AW08
+MAS62436,KAMLESH CHAUDHARY,LP,Non Regional,LP08
+MAS62437,KOMAL,LP,Non Regional,LP08
+MAS62438,DOLLY,LP,Non Regional,LP08
+MAS62440,Muskan,Housing Premium,Premium,HP06
+MAS62441,Ritika,Housing Premium,Premium,HP06
+MAS62448,Ishu,LP,Non Regional,LP08
+MAS62452,Shresth Sharma,AW,Onboarded,AW08
+MAS62453,Pragati Raghav,AW,Onboarded,AW08
+MAS62498,ROSHNI KHATOON,Neeman's,Abandon Cart,HP06
+MAS62500,Kakuli Dev Singh,AW,Onboarded,AW08
+MAS62501,Yash,Housing Premium,Premium,HP06
+MAS62502,SAHABAJ ALI,Neeman's,Abandon Cart,HP06
+MAS62503,SUBHAN,Neeman's,Abandon Cart,HP06
+MAS62504,ESHIKA GHATANEY,Neeman's,Abandon Cart,HP06
+MAS62505,KASHISH JHA,Neeman's,Abandon Cart,HP06
+MAS62506,SYED MONISH ALI,Neeman's,Abandon Cart,HP06
+MAS62534,Ashish Verma,DU Digital,Inbound,DU07
+MAS62535,NIshu,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS62540,VIVEK KUMAR,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS62541,PUSHPENDRA KUMAR,Bella-Vita Organic,Abandon Cart,BV05
+MAS62542,LALIT SHARMA,Bella-Vita Organic,Abandon Cart,BV05
+MAS62543,RITIKA KAUSHIK,Bella-Vita Organic,Abandon Cart,BV05
+MAS62544,SIDDHARTH SINGH,Bella-Vita Organic,Abandon Cart,BV05
+MAS62545,ASIF SIDDIQUI,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS62546,HRITIK KUMAR,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS62547,SAURABH MISHRA,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS62548,VISHNU PRIYA SINGH,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS62551,Preeti,Housing.com Owner,Owner,HO03
+MAS62563,ABDUL REHMAN,Housing.com Owner,Owner,HO03
+MAS62564,MOHD NASEEM,Housing.com Owner,Owner,HO03
+MAS62565,HIMANSHI,Housing.com Owner,Owner,HO03
+MAS62566,Sandhya Jaiswal,Birla Nu,Outbound,BN01
+MAS62567,KHUSHI MISHRA,Housing.com Owner,Owner,HO03
+MAS62568,PREETI MANDAL,Housing.com Owner,Owner,HO03
+MAS62580,VISHAKHA GUPTA,Neeman's,Abandon Cart,HP06
+MAS62581,AMAN DAHIYA,Neeman's,Abandon Cart,HP06
+MAS62582,ARJUN SHARMA,Neeman's,Abandon Cart,HP06
+MAS62608,KANIKA SINGH,GNC,PP,GN08
+MAS62609,MAHAK SHARMA,GNC,PP,GN08
+MAS62610,KHUSHI KAKKAR,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS62611,MANVEE PATHAK,GNC,Inbound,GN08
+MAS62612,MANSI,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS62613,ANKITA KUMARI,GNC,PP,GN08
+MAS62614,KAJAL YADAV,LP,Front desk,LP08
+MAS62615,ASIT MOHAN RATH,Dalmia Cement,Outbound,HP06
+MAS62616,SUNIL,Dalmia Cement,Outbound,HP06
+MAS62617,AKANKSHA RAI,LP,Front desk,LP08
+MAS62619,DEEPAK BARUAH,Dalmia Cement,Outbound,HP06
+MAS62620,LAXMAN RAO,Dalmia Cement,Outbound,HP06
+MAS62621,IZAM ALI,Dalmia Cement,Outbound,HP06
+MAS62622,PRANAY SHALIKRAM SHENDE,Dalmia Cement,Outbound,HP06
+MAS62623,PALLABI HORPAL,Dalmia Cement,Outbound,HP06
+MAS62624,J.ANANTHALAKSHMI,Dalmia Cement,Outbound,HP06
+MAS62625,PINKY SARKAR,Dalmia Cement,Outbound,HP06
+MAS62640,BHAWNA SOOD,LP,Front desk,LP08
+MAS62641,LAKSHMI MOL S,Dalmia Cement,Outbound,HP06
+MAS62642,Bikramjeet,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS62643,PREETI,LP,Front desk,LP08
+MAS62644,Pooja,Bella-Vita Organic,Inbound,BV05
+MAS62658,Shohail Akhtar,AW,Onboarded,AW08
+MAS62660,Syed Akib Hussain,AW,Onboarded,AW08
+MAS62686,MANIK GUPTA,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS62687,MOHD WASI,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS62688,KRISHNA TIWARI,-,-,#N/A
+MAS62689,UZAIF ARIF,Housing.com Owner,Owner,HO03
+MAS62690,Jasica tyagi,AW,Onboarded,AW08
+MAS62691,PRAVEEN RAY,-,-,#N/A
+MAS62695,TWINKLE WALIA,Housing.com Owner,Owner,HO03
+MAS62696,Priyanshu Gautam,-,-,#N/A
+MAS62697,FAHAD ANSARI,Housing.com Owner,Owner,HO03
+MAS62698,MD SAJRUDDIN ANSARI,Housing.com Owner,Owner,HO03
+MAS62699,RANI KHAN,Housing.com Owner,Owner,HO03
+MAS62700,AVIRAL DIXIT,Housing.com Owner,Owner,HO03
+MAS62701,ASHFIYA KHAN,Housing.com Owner,Owner,HO03
+MAS62702,POOJA TEVATIA,Housing.com Owner,Owner,HO03
+MAS62718,B Shivaji,LP,Regional Language,LP08
+MAS62719,Praveen Kumar,LP,Regional Language,LP08
+MAS62720,KAVITA,Housing Premium,Premium,HP06
+MAS62721,MAMTA,Housing Premium,Premium,HP06
+MAS62722,MAHAK CHAUHAN,Housing Premium,Premium,HP06
+MAS62723,AKSHARA PANDEY,Housing Premium,Premium,HP06
+MAS62724,SANJAY,Housing Premium,Premium,HP06
+MAS62725,KALINDI KUSHWAHA,Housing Premium,Premium,HP06
+MAS62726,SHARAD KUMAR,Housing Premium,Premium,HP06
+MAS62728,YASH PANDEY,Housing Premium,Premium,HP06
+MAS62729,Anju Haldar,Neeman's,Abandon Cart,HP06
+MAS62730,ANSHUL CHAUDHARY,Housing Premium,Premium,HP06
+MAS62731,Nishtha Chauhan,Neeman's,Abandon Cart,HP06
+MAS62733,Janhvi Suttel,Clovia,Inbound,CL07
+MAS62734,Vedansh Kumar,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS62727,Nandini,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS62780,RAHUL KUMAR,AW,Onboarded,AW08
+MAS62781,TALA YASEEN,Exicom,Inbound,EM02
+MAS62785,MUSKAN CHOUDHARY,GNC,Abandon Cart,GN08
+MAS62791,Suprabha Biswal,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS62794,AKANSHA RANI,Housing Premium,Premium,HP06
+MAS62795,POORVI,Housing Premium,Premium,HP06
+MAS62796,SHIVANSHU SINGH,Housing Premium,Premium,HP06
+MAS62797,RAJAT GOYAL,Housing Premium,Premium,HP06
+MAS62798,VIPIN SINGH,Housing Premium,Premium,HP06
+MAS62790,CHHAVI,Bella-Vita Organic,Repeat Customer LOB,BV05
+MAS62799,Jiyeshal Saxena,Housing Premium,Premium,HP06
+MAS62800,ALIZA SINGH,Clovia,Inbound,CL07

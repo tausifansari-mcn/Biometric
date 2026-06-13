@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS SupportQueries (
     ManagerEmpCode VARCHAR(100) NOT NULL,
     ManagerName VARCHAR(255) NOT NULL,
     ManagerUniqueCode VARCHAR(255) NOT NULL,
+    QuerySubject VARCHAR(255) NOT NULL DEFAULT 'General Query',
     QueryText TEXT NOT NULL,
     ImageData LONGBLOB NULL,
     ImageName VARCHAR(255) NULL,
