@@ -59,13 +59,13 @@ const saveProfile = (profile) => {
 const getAllowedTasks = (role, isManager = false) => {
   const normalizedRole = String(role || '').toLowerCase();
   if (normalizedRole === 'superadmin') {
-    return ['reports', 'roster', 'access', 'employees', 'managers', 'queries', 'password_resets', 'holidays', 'support'];
+    return ['my_report', 'reports', 'roster', 'access', 'employees', 'managers', 'queries', 'password_resets', 'holidays', 'support'];
   }
-  if (normalizedRole === 'admin') return ['queries', 'holidays', 'support'];
+  if (normalizedRole === 'admin') return ['my_report', 'queries', 'holidays', 'support'];
   if (normalizedRole === 'manager' || isManager) {
-    return ['reports', 'roster', 'queries', 'password_resets', 'support'];
+    return ['my_report', 'reports', 'roster', 'queries', 'password_resets', 'support'];
   }
-  return ['support'];
+  return ['my_report', 'support'];
 };
 
 const getStatus = (minutes) => {
@@ -1369,6 +1369,12 @@ function App() {
   const openTask = (task) => {
     if (!getAllowedTasks(role, isManager).includes(task)) return;
 
+    if (task === 'my_report' && role.toLowerCase() === 'superadmin') {
+      setSearchEmpCode('');
+      setSearchEmpName('');
+      setSearchVersion((v) => v + 1);
+    }
+
     setActiveAdminTask(task);
     setProfileOpen(false);
     setShowSupportPanel(false);
@@ -1581,6 +1587,75 @@ function App() {
     return matchesSubject && matchesEmpId;
   });
 
+  const buildMyReportRows = () => {
+    const [yr, mn] = selectedMonth.split('-').map(Number);
+    const daysInMonth = new Date(yr, mn, 0).getDate();
+    const rows = [];
+    const LATE_CUTOFF_HOUR = 9;
+    const LATE_CUTOFF_MIN = 30;
+    const PRESENT_MINUTES = 540;
+    const HALF_DAY_MINUTES = 270;
+
+    for (let d = 1; d <= daysInMonth; d += 1) {
+      const date = new Date(yr, mn - 1, d);
+      const dateKey = toDateKey(date);
+      const dayName = date.toLocaleDateString('en-IN', { weekday: 'short' });
+      const isSunday = date.getDay() === 0;
+      const isFuture = date > today;
+      const holiday = holidayByDate[dateKey];
+      const record = attendanceByDate[dateKey];
+
+      if (holiday) {
+        rows.push({ dateKey, dayName, label: 'Holiday', detail: holiday.reason, cls: 'mr-holiday' });
+        continue;
+      }
+      if (isSunday && (!record || record.WorkingMinutes < HALF_DAY_MINUTES)) {
+        rows.push({ dateKey, dayName, label: 'Weekly Off', detail: '', cls: 'mr-off' });
+        continue;
+      }
+      if (isFuture) {
+        rows.push({ dateKey, dayName, label: '—', detail: 'Future', cls: 'mr-future' });
+        continue;
+      }
+      if (!record) {
+        rows.push({ dateKey, dayName, label: 'Absent', detail: '', cls: 'mr-absent', punchIn: '—', punchOut: '—', loginHours: '—', late: '—', adherence: '—' });
+        continue;
+      }
+
+      const wm = record.WorkingMinutes;
+      let statusLabel = 'Absent';
+      let statusCls = 'mr-absent';
+      if (wm >= PRESENT_MINUTES) { statusLabel = 'Present'; statusCls = 'mr-present'; }
+      else if (wm >= HALF_DAY_MINUTES) { statusLabel = 'Half Day'; statusCls = 'mr-halfday'; }
+
+      let lateLabel = '—';
+      let lateCls = '';
+      let adherenceLabel = '—';
+      if (statusLabel !== 'Absent' && record.FirstPunchIn) {
+        const punchTime = new Date(record.FirstPunchIn);
+        const isLate = punchTime.getHours() > LATE_CUTOFF_HOUR
+          || (punchTime.getHours() === LATE_CUTOFF_HOUR && punchTime.getMinutes() > LATE_CUTOFF_MIN);
+        lateLabel = isLate ? 'Late' : 'On Time';
+        lateCls = isLate ? 'mr-late' : 'mr-ontime';
+        adherenceLabel = wm >= PRESENT_MINUTES ? 'Met' : 'Short';
+      }
+
+      rows.push({
+        dateKey,
+        dayName,
+        punchIn: formatTime(record.FirstPunchIn),
+        punchOut: formatTime(record.LastPunchOut),
+        loginHours: record.WorkingHours,
+        label: statusLabel,
+        cls: statusCls,
+        late: lateLabel,
+        lateCls,
+        adherence: adherenceLabel
+      });
+    }
+    return rows;
+  };
+
   return (
     <div className={`dashboard ${activeAdminTask ? 'admin-page-open' : ''}`}>
       <header className="dash-header">
@@ -1647,6 +1722,15 @@ function App() {
               <div className="profile-row"><span>LOB</span><strong>{lobName}</strong></div>
             )}
             <div className="profile-actions task-profile-actions">
+              {allowedTasks.includes('my_report') && (
+                <button
+                  className="profile-action profile-action-myreport"
+                  type="button"
+                  onClick={() => openTask('my_report')}
+                >
+                  My Report
+                </button>
+              )}
               {allowedTasks.includes('reports') && (
                 <button
                   className="profile-action profile-action-report"
@@ -1757,6 +1841,15 @@ function App() {
             <span>{role || 'Employee'}</span>
             <strong>Task Center</strong>
           </div>
+          {allowedTasks.includes('my_report') && (
+            <button
+              type="button"
+              className={activeAdminTask === 'my_report' ? 'active' : ''}
+              onClick={() => openTask('my_report')}
+            >
+              <span>0</span> My Report
+            </button>
+          )}
           {allowedTasks.includes('reports') && (
             <button
               type="button"
@@ -2172,6 +2265,84 @@ function App() {
           <div className="stat-card"><div className="stat-icon si-absent">A</div><div className="stat-num sn-absent">{summary.absent}</div><div className="stat-lbl">Absent / Short</div><div className="stat-bar sb-absent" /></div>
         </div>
       )}
+
+      {activeAdminTask === 'my_report' && (() => {
+        const rows = buildMyReportRows();
+        const workingRows = rows.filter((r) => r.label !== 'Holiday' && r.label !== 'Weekly Off' && r.label !== '—');
+        const presentRows = rows.filter((r) => r.label === 'Present');
+        const halfDayRows = rows.filter((r) => r.label === 'Half Day');
+        const attendedRows = [...presentRows, ...halfDayRows];
+        const onTimeRows = attendedRows.filter((r) => r.late === 'On Time');
+        const lateRows = attendedRows.filter((r) => r.late === 'Late');
+        const workingDays = workingRows.length;
+        const adherencePct = workingDays ? ((attendedRows.length / workingDays) * 100).toFixed(1) : '0.0';
+        const latePct = attendedRows.length ? ((lateRows.length / attendedRows.length) * 100).toFixed(1) : '0.0';
+
+        return (
+          <section className="my-report-panel">
+            <div className="panel-heading">
+              <div>
+                <span className="panel-kicker">Personal Attendance Report</span>
+                <h3>My Report — {employeeName}</h3>
+              </div>
+              <div className="my-report-month-wrap">
+                <span className="month-lbl">Month</span>
+                <input
+                  type="month"
+                  max={currentMonth}
+                  value={selectedMonth}
+                  className="month-input"
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="my-report-kpis">
+              <div className="my-kpi my-kpi-blue"><span>Working Days</span><strong>{workingDays}</strong></div>
+              <div className="my-kpi my-kpi-green"><span>Present</span><strong>{presentRows.length}</strong></div>
+              <div className="my-kpi my-kpi-amber"><span>Half Day</span><strong>{halfDayRows.length}</strong></div>
+              <div className="my-kpi my-kpi-red"><span>Absent</span><strong>{workingRows.filter((r) => r.label === 'Absent').length}</strong></div>
+              <div className="my-kpi my-kpi-teal"><span>On Time</span><strong>{onTimeRows.length}</strong></div>
+              <div className="my-kpi my-kpi-orange"><span>Late</span><strong>{lateRows.length}</strong></div>
+              <div className="my-kpi my-kpi-navy"><span>Adherence</span><strong>{adherencePct}%</strong></div>
+              <div className="my-kpi my-kpi-rose"><span>Late %</span><strong>{latePct}%</strong></div>
+            </div>
+
+            <div className="my-report-shift-note">Shift: 9:30 AM – 6:30 PM &nbsp;|&nbsp; Late = Punch In after 9:30 AM &nbsp;|&nbsp; Adherence Met = 9+ hours login</div>
+
+            <div className="my-report-table-wrap">
+              <table className="my-report-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Day</th>
+                    <th>Punch In</th>
+                    <th>Punch Out</th>
+                    <th>Login Hrs</th>
+                    <th>Status</th>
+                    <th>Punctuality</th>
+                    <th>Shift Adherence</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr key={row.dateKey} className={row.cls}>
+                      <td>{row.dateKey}</td>
+                      <td>{row.dayName}</td>
+                      <td>{row.punchIn || '—'}</td>
+                      <td>{row.punchOut || '—'}</td>
+                      <td>{row.loginHours || '—'}</td>
+                      <td><span className={`mr-badge ${row.cls}`}>{row.label}</span></td>
+                      <td>{row.late ? <span className={row.lateCls}>{row.late}</span> : '—'}</td>
+                      <td>{row.adherence || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        );
+      })()}
 
       {activeAdminTask === 'reports' && (
         <ReportDashboard
