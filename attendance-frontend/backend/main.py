@@ -3551,7 +3551,6 @@ def get_agent_view(
         return {"month": month, "mandate": mandate, "working_days": working_days, "employees": []}
 
     emp_codes = [e["emp_code"].upper() for e in employees]
-    employee_by_code = {e["emp_code"].upper(): e for e in employees}
 
     LATE_CUTOFF = time(9, 30)
     PRESENT_MINUTES = 540
@@ -3576,15 +3575,18 @@ def get_agent_view(
         att_conn = get_attendance_connection()
         try:
             att_cursor = att_conn.cursor()
-            att_cursor.execute(sql, tuple(emp_codes) + (start_dt, end_dt + timedelta(days=1)))
-            for row in att_cursor.fetchall():
-                uid = str(row[0]).upper()
-                if uid in attendance_by_emp:
-                    attendance_by_emp[uid].append({
-                        "first_punch": row[2],
-                        "last_punch": row[3],
-                        "working_minutes": int(row[4] or 0)
-                    })
+            try:
+                att_cursor.execute(sql, tuple(emp_codes) + (start_dt, end_dt + timedelta(days=1)))
+                for row in att_cursor.fetchall():
+                    uid = str(row[0]).upper()
+                    if uid in attendance_by_emp:
+                        attendance_by_emp[uid].append({
+                            "first_punch": row[2],
+                            "last_punch": row[3],
+                            "working_minutes": max(0, int(row[4] or 0))
+                        })
+            finally:
+                att_cursor.close()
         finally:
             att_conn.close()
     except Exception as exc:
@@ -3626,8 +3628,6 @@ def get_agent_view(
         attended = present + half_day
         avg_in = _mins_to_hhmm(sum(in_times) / len(in_times)) if in_times else None
         avg_out = _mins_to_hhmm(sum(out_times) / len(out_times)) if out_times else None
-        total_h = total_minutes // 60
-        total_m = total_minutes % 60
         late_pct = round(late_days / attended * 100, 1) if attended > 0 else 0.0
         adh_pct = round(attended / working_days * 100, 1) if working_days > 0 else 0.0
 
@@ -3639,7 +3639,7 @@ def get_agent_view(
             "manager_name": emp.get("manager_name"),
             "avg_punch_in": avg_in,
             "avg_punch_out": avg_out,
-            "total_login_hours": f"{total_h}:{total_m:02d}",
+            "total_login_hours": _mins_to_hhmm(total_minutes),
             "present": present,
             "half_day": half_day,
             "absent": absent,
