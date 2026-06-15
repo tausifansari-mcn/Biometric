@@ -183,7 +183,7 @@ const AgentTable = ({ agents, agentCount }) => (
   </article>
 );
 
-function ReportDashboard({ apiBaseUrl, token, initialMonth }) {
+function ReportDashboard({ apiBaseUrl, token, initialMonth, isSuperAdmin }) {
   const todayKey = localDateKey(new Date());
   const monthStart = `${initialMonth}-01`;
   const monthEndCandidate = localDateKey(new Date(
@@ -348,12 +348,14 @@ function ReportDashboard({ apiBaseUrl, token, initialMonth }) {
           <h2>Adherence Command Center</h2>
           <p>Process and LOB capacity, punctuality, and attendance shrinkage in one view.</p>
         </div>
-        <div className="report-downloads">
-          <button type="button" onClick={downloadDateWise} disabled={!report}>Download Date-wise</button>
-          <button type="button" onClick={downloadAgentWise} disabled={!report || downloadLoading === 'agent'}>
-            {downloadLoading === 'agent' ? 'Preparing Agent Report...' : 'Download Agent-wise'}
-          </button>
-        </div>
+        {isSuperAdmin && (
+          <div className="report-downloads">
+            <button type="button" onClick={downloadDateWise} disabled={!report}>Download Date-wise</button>
+            <button type="button" onClick={downloadAgentWise} disabled={!report || downloadLoading === 'agent'}>
+              {downloadLoading === 'agent' ? 'Preparing Agent Report...' : 'Download Agent-wise'}
+            </button>
+          </div>
+        )}
       </div>
 
       <form className="report-filters" onSubmit={submitFilters}>

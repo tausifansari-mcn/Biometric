@@ -2178,6 +2178,7 @@ function App() {
           apiBaseUrl={API_BASE_URL}
           token={token}
           initialMonth={selectedMonth}
+          isSuperAdmin={isSuperAdmin}
         />
       )}
 
