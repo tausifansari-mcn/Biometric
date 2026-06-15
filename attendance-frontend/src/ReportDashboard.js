@@ -204,6 +204,13 @@ function ReportDashboard({ apiBaseUrl, token, initialMonth, isSuperAdmin }) {
   const [loading, setLoading] = useState(true);
   const [downloadLoading, setDownloadLoading] = useState('');
   const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState('adherence');
+  const [agentMonth, setAgentMonth] = useState(initialMonth);
+  const [agentProcessFilter, setAgentProcessFilter] = useState('');
+  const [agentLobFilter, setAgentLobFilter] = useState('');
+  const [agentData, setAgentData] = useState(null);
+  const [agentLoading, setAgentLoading] = useState(false);
+  const [agentError, setAgentError] = useState('');
 
   const fetchReport = useCallback(async () => {
     setLoading(true);
@@ -234,6 +241,30 @@ function ReportDashboard({ apiBaseUrl, token, initialMonth, isSuperAdmin }) {
   useEffect(() => {
     fetchReport();
   }, [fetchReport]);
+
+  const fetchAgentView = useCallback(async () => {
+    setAgentLoading(true);
+    setAgentError('');
+    try {
+      const params = new URLSearchParams({ month: agentMonth });
+      if (agentProcessFilter) params.set('process_name', agentProcessFilter);
+      if (agentLobFilter) params.set('lob_name', agentLobFilter);
+      const response = await fetch(`${apiBaseUrl}/api/reports/agent-view?${params}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || 'Failed to load agent view');
+      setAgentData(data);
+    } catch (err) {
+      setAgentError(err.message);
+    } finally {
+      setAgentLoading(false);
+    }
+  }, [apiBaseUrl, token, agentMonth, agentProcessFilter, agentLobFilter]);
+
+  useEffect(() => {
+    if (activeTab === 'agent-view') fetchAgentView();
+  }, [activeTab, fetchAgentView]);
 
   const slides = useMemo(() => (
     report ? ['overall', ...report.processes.map((process) => process.name)] : ['overall']
@@ -332,6 +363,21 @@ function ReportDashboard({ apiBaseUrl, token, initialMonth, isSuperAdmin }) {
     }
   };
 
+  const downloadAgentViewCsv = () => {
+    if (!agentData) return;
+    downloadCsv(
+      `agent-view-${agentData.month}.csv`,
+      ['Emp Code', 'Name', 'Process', 'LOB', 'Manager', 'Avg Punch In', 'Avg Punch Out',
+        'Total Login Hrs', 'Present', 'Half Day', 'Absent', 'Late Days', 'Working Days', 'Late %', 'Adherence %'],
+      agentData.employees.map((e) => [
+        e.emp_code, e.name, e.process_name, e.lob_name, e.manager_name || 'Unassigned',
+        e.avg_punch_in || '-', e.avg_punch_out || '-', e.total_login_hours,
+        e.present, e.half_day, e.absent, e.late_days, e.working_days,
+        e.late_percent, e.adherence_percent
+      ])
+    );
+  };
+
   const slideBack = () => {
     setSelectedSlide(slides[Math.max(currentSlideIndex - 1, 0)]);
   };
@@ -348,7 +394,7 @@ function ReportDashboard({ apiBaseUrl, token, initialMonth, isSuperAdmin }) {
           <h2>Adherence Command Center</h2>
           <p>Process and LOB capacity, punctuality, and attendance shrinkage in one view.</p>
         </div>
-        {isSuperAdmin && (
+        {isSuperAdmin && activeTab === 'adherence' && (
           <div className="report-downloads">
             <button type="button" onClick={downloadDateWise} disabled={!report}>Download Date-wise</button>
             <button type="button" onClick={downloadAgentWise} disabled={!report || downloadLoading === 'agent'}>
@@ -356,133 +402,291 @@ function ReportDashboard({ apiBaseUrl, token, initialMonth, isSuperAdmin }) {
             </button>
           </div>
         )}
+        {isSuperAdmin && activeTab === 'agent-view' && agentData && (
+          <div className="report-downloads">
+            <button type="button" onClick={downloadAgentViewCsv}>Download Agent View CSV</button>
+          </div>
+        )}
       </div>
 
-      <form className="report-filters" onSubmit={submitFilters}>
-        <label>
-          <span>From Date</span>
-          <input type="date" max={todayKey} value={filters.date_from} onChange={(event) => updateFilter('date_from', event.target.value)} required />
-        </label>
-        <label>
-          <span>To Date</span>
-          <input type="date" min={filters.date_from} max={todayKey} value={filters.date_to} onChange={(event) => updateFilter('date_to', event.target.value)} required />
-        </label>
-        <label>
-          <span>Process</span>
-          <select value={filters.process_name} onChange={(event) => updateFilter('process_name', event.target.value)}>
-            <option value="">All Processes</option>
-            {(report?.process_options || []).map((process) => <option value={process} key={process}>{process}</option>)}
-          </select>
-        </label>
-        <label>
-          <span>LOB</span>
-          <select value={filters.lob_name} onChange={(event) => updateFilter('lob_name', event.target.value)}>
-            <option value="">All LOBs</option>
-            {(report?.lob_options || []).map((lob) => <option value={lob} key={lob}>{lob}</option>)}
-          </select>
-        </label>
-        <label className="report-agent-filter">
-          <span>Agent</span>
-          <input type="search" placeholder="Name or employee code" value={filters.agent_search} onChange={(event) => updateFilter('agent_search', event.target.value)} />
-        </label>
-        <button type="submit" className="report-apply">Apply Filters</button>
-        <button type="button" className="report-reset" onClick={resetFilters}>Reset</button>
-      </form>
+      <div className="report-tab-bar">
+        <button
+          type="button"
+          className={activeTab === 'adherence' ? 'active' : ''}
+          onClick={() => setActiveTab('adherence')}
+        >
+          Adherence Dashboard
+        </button>
+        <button
+          type="button"
+          className={activeTab === 'agent-view' ? 'active' : ''}
+          onClick={() => setActiveTab('agent-view')}
+        >
+          Agent View
+        </button>
+      </div>
 
-      {loading && <div className="report-loading">Building the report...</div>}
-      {error && <div className="report-error" role="alert">{error}</div>}
-
-      {!loading && report && (
+      {activeTab === 'adherence' && (
         <>
-          <div className="report-scope-strip">
-            <div>
-              <span>Access Scope</span>
-              <strong>{report.scope_label}</strong>
-            </div>
-            <div>
-              <span>Reporting Window</span>
-              <strong>{report.date_from} to {report.date_to}</strong>
-            </div>
-            <div>
-              <span>Late Rule</span>
-              <strong>
-                {report.shift_rule_label
-                  || `After ${report.shift_start} + ${report.late_grace_minutes} min grace`}
-              </strong>
-            </div>
-          </div>
+          <form className="report-filters" onSubmit={submitFilters}>
+            <label>
+              <span>From Date</span>
+              <input type="date" max={todayKey} value={filters.date_from} onChange={(event) => updateFilter('date_from', event.target.value)} required />
+            </label>
+            <label>
+              <span>To Date</span>
+              <input type="date" min={filters.date_from} max={todayKey} value={filters.date_to} onChange={(event) => updateFilter('date_to', event.target.value)} required />
+            </label>
+            <label>
+              <span>Process</span>
+              <select value={filters.process_name} onChange={(event) => updateFilter('process_name', event.target.value)}>
+                <option value="">All Processes</option>
+                {(report?.process_options || []).map((process) => <option value={process} key={process}>{process}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>LOB</span>
+              <select value={filters.lob_name} onChange={(event) => updateFilter('lob_name', event.target.value)}>
+                <option value="">All LOBs</option>
+                {(report?.lob_options || []).map((lob) => <option value={lob} key={lob}>{lob}</option>)}
+              </select>
+            </label>
+            <label className="report-agent-filter">
+              <span>Agent</span>
+              <input type="search" placeholder="Name or employee code" value={filters.agent_search} onChange={(event) => updateFilter('agent_search', event.target.value)} />
+            </label>
+            <button type="submit" className="report-apply">Apply Filters</button>
+            <button type="button" className="report-reset" onClick={resetFilters}>Reset</button>
+          </form>
 
-          <nav className="report-slide-nav" aria-label="Report slides">
-            {slides.map((slide, index) => (
-              <button
-                type="button"
-                className={selectedSlide === slide ? 'active' : ''}
-                onClick={() => setSelectedSlide(slide)}
-                key={slide}
-              >
-                <span>{String(index + 1).padStart(2, '0')}</span>
-                {slide === 'overall' ? 'Overall' : slide}
-              </button>
-            ))}
-          </nav>
+          {loading && <div className="report-loading">Building the report...</div>}
+          {error && <div className="report-error" role="alert">{error}</div>}
 
-          <div className="report-slide">
-            <div className="report-slide-title">
-              <div>
-                <span>{selectedProcess ? 'Process Slide' : 'Overall Slide'}</span>
-                <h3>{selectedProcess ? selectedProcess.name : 'Overall Workforce View'}</h3>
-                <p>{selectedProcess ? `${selectedProcess.lobs.length} LOBs in this process` : `${report.processes.length} processes in your access scope`}</p>
+          {!loading && report && (
+            <>
+              <div className="report-scope-strip">
+                <div>
+                  <span>Access Scope</span>
+                  <strong>{report.scope_label}</strong>
+                </div>
+                <div>
+                  <span>Reporting Window</span>
+                  <strong>{report.date_from} to {report.date_to}</strong>
+                </div>
+                <div>
+                  <span>Late Rule</span>
+                  <strong>
+                    {report.shift_rule_label
+                      || `After ${report.shift_start} + ${report.late_grace_minutes} min grace`}
+                  </strong>
+                </div>
               </div>
-              <div className="report-slide-controls">
-                <button type="button" onClick={slideBack} disabled={currentSlideIndex === 0}>Previous</button>
-                <strong>{currentSlideIndex + 1} / {slides.length}</strong>
-                <button type="button" onClick={slideNext} disabled={currentSlideIndex === slides.length - 1}>Next</button>
-              </div>
-            </div>
 
-            <ReportKpis metrics={selectedProcess?.metrics || report.overall} />
+              <nav className="report-slide-nav" aria-label="Report slides">
+                {slides.map((slide, index) => (
+                  <button
+                    type="button"
+                    className={selectedSlide === slide ? 'active' : ''}
+                    onClick={() => setSelectedSlide(slide)}
+                    key={slide}
+                  >
+                    <span>{String(index + 1).padStart(2, '0')}</span>
+                    {slide === 'overall' ? 'Overall' : slide}
+                  </button>
+                ))}
+              </nav>
 
-            <div className="report-chart-grid">
-              <AttendanceDonut metrics={selectedProcess?.metrics || report.overall} />
-              {selectedProcess
-                ? <StatusStack metrics={selectedProcess.metrics} />
-                : <ProcessBars processes={report.processes} />}
-            </div>
-
-            {selectedProcess && (
-              <article className="report-lob-section">
-                <div className="report-chart-heading">
+              <div className="report-slide">
+                <div className="report-slide-title">
                   <div>
-                    <span>LOB Drilldown</span>
-                    <h4>{selectedProcess.name} performance</h4>
+                    <span>{selectedProcess ? 'Process Slide' : 'Overall Slide'}</span>
+                    <h3>{selectedProcess ? selectedProcess.name : 'Overall Workforce View'}</h3>
+                    <p>{selectedProcess ? `${selectedProcess.lobs.length} LOBs in this process` : `${report.processes.length} processes in your access scope`}</p>
                   </div>
-                  <small>Mandate is maximum active agents</small>
+                  <div className="report-slide-controls">
+                    <button type="button" onClick={slideBack} disabled={currentSlideIndex === 0}>Previous</button>
+                    <strong>{currentSlideIndex + 1} / {slides.length}</strong>
+                    <button type="button" onClick={slideNext} disabled={currentSlideIndex === slides.length - 1}>Next</button>
+                  </div>
                 </div>
-                <div className="report-lob-grid">
-                  {selectedProcess.lobs.map((lob) => (
-                    <div className="report-lob-card" key={lob.name}>
+
+                <ReportKpis metrics={selectedProcess?.metrics || report.overall} />
+
+                <div className="report-chart-grid">
+                  <AttendanceDonut metrics={selectedProcess?.metrics || report.overall} />
+                  {selectedProcess
+                    ? <StatusStack metrics={selectedProcess.metrics} />
+                    : <ProcessBars processes={report.processes} />}
+                </div>
+
+                {selectedProcess && (
+                  <article className="report-lob-section">
+                    <div className="report-chart-heading">
                       <div>
-                        <span>{lob.name}</span>
-                        <strong>{lob.metrics.adherence_percent}%</strong>
+                        <span>LOB Drilldown</span>
+                        <h4>{selectedProcess.name} performance</h4>
                       </div>
-                      <div className="report-lob-progress"><i style={{ width: `${Math.min(lob.metrics.adherence_percent, 100)}%` }} /></div>
-                      <dl>
-                        <div><dt>Mandate</dt><dd>{lob.metrics.mandate}</dd></div>
-                        <div><dt>On Time</dt><dd>{lob.metrics.on_time_percent}%</dd></div>
-                        <div><dt>Late</dt><dd>{lob.metrics.late_percent}%</dd></div>
-                        <div><dt>Shrinkage</dt><dd>{lob.metrics.shrinkage_percent}%</dd></div>
-                      </dl>
+                      <small>Mandate is maximum active agents</small>
                     </div>
-                  ))}
-                </div>
-              </article>
-            )}
+                    <div className="report-lob-grid">
+                      {selectedProcess.lobs.map((lob) => (
+                        <div className="report-lob-card" key={lob.name}>
+                          <div>
+                            <span>{lob.name}</span>
+                            <strong>{lob.metrics.adherence_percent}%</strong>
+                          </div>
+                          <div className="report-lob-progress"><i style={{ width: `${Math.min(lob.metrics.adherence_percent, 100)}%` }} /></div>
+                          <dl>
+                            <div><dt>Mandate</dt><dd>{lob.metrics.mandate}</dd></div>
+                            <div><dt>On Time</dt><dd>{lob.metrics.on_time_percent}%</dd></div>
+                            <div><dt>Late</dt><dd>{lob.metrics.late_percent}%</dd></div>
+                            <div><dt>Shrinkage</dt><dd>{lob.metrics.shrinkage_percent}%</dd></div>
+                          </dl>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+                )}
 
-            <AgentTable agents={visibleAgents} agentCount={selectedProcess ? visibleAgents.length : report.agent_count} />
+                <AgentTable agents={visibleAgents} agentCount={selectedProcess ? visibleAgents.length : report.agent_count} />
 
-            <p className="report-methodology">{report.methodology}</p>
-          </div>
+                <p className="report-methodology">{report.methodology}</p>
+              </div>
+            </>
+          )}
         </>
+      )}
+
+      {activeTab === 'agent-view' && (
+        <div className="agent-view-panel">
+          <div className="agent-view-filters">
+            <label>
+              <span>Month</span>
+              <input
+                type="month"
+                value={agentMonth}
+                max={todayKey.slice(0, 7)}
+                onChange={(e) => setAgentMonth(e.target.value)}
+              />
+            </label>
+            {isSuperAdmin && agentData && (
+              <>
+                <label>
+                  <span>Process</span>
+                  <select value={agentProcessFilter} onChange={(e) => { setAgentProcessFilter(e.target.value); setAgentLobFilter(''); }}>
+                    <option value="">All Processes</option>
+                    {[...new Set(agentData.employees.map((e) => e.process_name))].sort().map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>LOB</span>
+                  <select value={agentLobFilter} onChange={(e) => setAgentLobFilter(e.target.value)}>
+                    <option value="">All LOBs</option>
+                    {[...new Set(
+                      agentData.employees
+                        .filter((e) => !agentProcessFilter || e.process_name === agentProcessFilter)
+                        .map((e) => e.lob_name)
+                    )].sort().map((l) => (
+                      <option key={l} value={l}>{l}</option>
+                    ))}
+                  </select>
+                </label>
+              </>
+            )}
+            <button type="button" className="report-apply" onClick={fetchAgentView}>Apply</button>
+          </div>
+
+          {agentLoading && <div className="report-loading">Loading agent data...</div>}
+          {agentError && <div className="report-error" role="alert">{agentError}</div>}
+
+          {!agentLoading && agentData && (
+            <>
+              <div className="agent-view-kpis">
+                <article className="agent-kpi agent-kpi-navy">
+                  <span>Mandate</span>
+                  <strong>{agentData.mandate}</strong>
+                  <small>Active executives in scope</small>
+                </article>
+                <article className="agent-kpi agent-kpi-teal">
+                  <span>Employees</span>
+                  <strong>{agentData.employees.length}</strong>
+                  <small>In current scope</small>
+                </article>
+                <article className="agent-kpi agent-kpi-blue">
+                  <span>Avg Adherence</span>
+                  <strong>
+                    {agentData.employees.length
+                      ? `${(agentData.employees.reduce((s, e) => s + e.adherence_percent, 0) / agentData.employees.length).toFixed(1)}%`
+                      : '—'}
+                  </strong>
+                  <small>Across all agents</small>
+                </article>
+                <article className="agent-kpi agent-kpi-amber">
+                  <span>Avg Late</span>
+                  <strong>
+                    {agentData.employees.length
+                      ? `${(agentData.employees.reduce((s, e) => s + e.late_percent, 0) / agentData.employees.length).toFixed(1)}%`
+                      : '—'}
+                  </strong>
+                  <small>Across all agents</small>
+                </article>
+                <article className="agent-kpi agent-kpi-slate">
+                  <span>Working Days</span>
+                  <strong>{agentData.working_days}</strong>
+                  <small>Non-Sunday non-holiday</small>
+                </article>
+              </div>
+
+              <div className="agent-view-table-wrap">
+                <table className="agent-view-table">
+                  <thead>
+                    <tr>
+                      <th>Agent</th>
+                      <th>Process / LOB</th>
+                      <th>Manager</th>
+                      <th>Avg Punch In</th>
+                      <th>Avg Punch Out</th>
+                      <th>Login Hrs</th>
+                      <th>P / HD / A</th>
+                      <th>Late Days</th>
+                      <th>Late %</th>
+                      <th>Adherence %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {agentData.employees
+                      .filter((e) => (!agentProcessFilter || e.process_name === agentProcessFilter) && (!agentLobFilter || e.lob_name === agentLobFilter))
+                      .map((emp) => (
+                        <tr key={emp.emp_code}>
+                          <td><strong>{emp.name}</strong><span>{emp.emp_code}</span></td>
+                          <td><strong>{emp.process_name}</strong><span>{emp.lob_name}</span></td>
+                          <td>{emp.manager_name || 'Unassigned'}</td>
+                          <td>{emp.avg_punch_in || '—'}</td>
+                          <td>{emp.avg_punch_out || '—'}</td>
+                          <td>{emp.total_login_hours}</td>
+                          <td>
+                            <span className="av-p">{emp.present}P</span>
+                            {' / '}
+                            <span className="av-hd">{emp.half_day}HD</span>
+                            {' / '}
+                            <span className="av-a">{emp.absent}A</span>
+                          </td>
+                          <td>{emp.late_days}</td>
+                          <td className={emp.late_percent > 30 ? 'metric-risk' : ''}>{emp.late_percent}%</td>
+                          <td className={emp.adherence_percent >= 80 ? 'metric-good' : 'metric-risk'}>{emp.adherence_percent}%</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+                {agentData.employees.length === 0 && (
+                  <p className="report-empty">No employees found in this scope.</p>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       )}
     </section>
   );
