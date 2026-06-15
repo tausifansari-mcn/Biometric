@@ -338,6 +338,29 @@ class ReportOut(BaseModel):
     process_options: list[str]
     lob_options: list[str]
 
+class AgentViewEmployeeOut(BaseModel):
+    emp_code: str
+    name: str
+    process_name: str
+    lob_name: str
+    manager_name: Optional[str]
+    avg_punch_in: Optional[str]
+    avg_punch_out: Optional[str]
+    total_login_hours: str
+    present: int
+    half_day: int
+    absent: int
+    late_days: int
+    working_days: int
+    late_percent: float
+    adherence_percent: float
+
+class AgentViewOut(BaseModel):
+    month: str
+    mandate: int
+    working_days: int
+    employees: list[AgentViewEmployeeOut]
+
 class SupportQueryOut(BaseModel):
     id: int
     employee_emp_code: str
@@ -3416,6 +3439,217 @@ def get_adherence_report(
         "process_options": process_options,
         "lob_options": lob_options
     }
+
+@app.get("/api/reports/agent-view", response_model=AgentViewOut)
+def get_agent_view(
+    month: Optional[str] = Query(None),
+    process_name: Optional[str] = Query(None),
+    lob_name: Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user)
+):
+    """Monthly per-employee attendance metrics scoped to role. SuperAdmin sees all, Manager sees assigned only."""
+    role = str(current_user.get("role", "")).lower()
+    is_superadmin = role == "superadmin"
+
+    if not month:
+        month = datetime.now().strftime("%Y-%m")
+    try:
+        year, mon = map(int, month.split("-"))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="month must be YYYY-MM")
+    start_dt = datetime(year, mon, 1)
+    if mon == 12:
+        end_dt = datetime(year + 1, 1, 1) - timedelta(days=1)
+    else:
+        end_dt = datetime(year, mon + 1, 1) - timedelta(days=1)
+
+    mysql_conn = get_mysql_connection()
+    mysql_cursor = mysql_conn.cursor(dictionary=True)
+    try:
+        ensure_agent_process_table(mysql_cursor)
+
+        manager_row = None
+        if not is_superadmin:
+            manager_row = get_manager_for_user(mysql_cursor, current_user["emp_code"])
+            if not manager_row:
+                raise HTTPException(status_code=403, detail="Manager or SuperAdmin access required")
+
+        # Employees in scope
+        emp_sql = """
+            SELECT DISTINCT
+                e.EmpCode AS emp_code,
+                e.EmpName AS name,
+                e.Designation AS designation,
+                COALESCE(ap.`Process`, e.process_name, 'Unassigned') AS process_name,
+                COALESCE(ap.LOBName, e.lob_name, 'Unassigned') AS lob_name,
+                m.Manager_Name AS manager_name
+            FROM EmployeeDetails e
+            LEFT JOIN AgentProcess ap ON ap.EmpCode = e.EmpCode
+            LEFT JOIN Managers m ON e.assign_manager_id = m.managar_unique_code
+            WHERE LOWER(COALESCE(e.Role, 'Employee')) = 'employee'
+              AND LOWER(COALESCE(e.status, 'active')) = 'active'
+        """
+        emp_params = []
+        if not is_superadmin:
+            emp_sql += " AND e.assign_manager_id = %s"
+            emp_params.append(manager_row["managar_unique_code"])
+        if process_name:
+            emp_sql += " AND COALESCE(ap.`Process`, e.process_name) = %s"
+            emp_params.append(process_name)
+        if lob_name:
+            emp_sql += " AND COALESCE(ap.LOBName, e.lob_name) = %s"
+            emp_params.append(lob_name)
+        emp_sql += " ORDER BY name"
+        mysql_cursor.execute(emp_sql, tuple(emp_params))
+        employees = mysql_cursor.fetchall()
+
+        # Mandate = count of Active Executives in scope
+        man_sql = """
+            SELECT COUNT(DISTINCT e.EmpCode) AS cnt
+            FROM EmployeeDetails e
+            LEFT JOIN AgentProcess ap ON ap.EmpCode = e.EmpCode
+            WHERE LOWER(COALESCE(e.Role, 'Employee')) = 'employee'
+              AND LOWER(COALESCE(e.status, 'active')) = 'active'
+              AND LOWER(COALESCE(e.Designation, '')) = 'executive'
+        """
+        man_params = []
+        if not is_superadmin:
+            man_sql += " AND e.assign_manager_id = %s"
+            man_params.append(manager_row["managar_unique_code"])
+        if process_name:
+            man_sql += " AND COALESCE(ap.`Process`, e.process_name) = %s"
+            man_params.append(process_name)
+        if lob_name:
+            man_sql += " AND COALESCE(ap.LOBName, e.lob_name) = %s"
+            man_params.append(lob_name)
+        mysql_cursor.execute(man_sql, tuple(man_params))
+        mandate = (mysql_cursor.fetchone() or {}).get("cnt", 0)
+
+        # Holidays for the month
+        mysql_cursor.execute(
+            "SELECT HolidayDate FROM Holidays WHERE HolidayDate >= %s AND HolidayDate <= %s",
+            (start_dt.date().isoformat(), end_dt.date().isoformat())
+        )
+        holiday_dates = set()
+        for row in mysql_cursor.fetchall():
+            hd = row["HolidayDate"]
+            holiday_dates.add(hd.isoformat() if hasattr(hd, "isoformat") else str(hd))
+
+    finally:
+        mysql_cursor.close()
+        mysql_conn.close()
+
+    # Working days in month (non-Sunday, non-holiday)
+    working_days = 0
+    cur = start_dt.date()
+    while cur <= end_dt.date():
+        if cur.weekday() != 6 and cur.isoformat() not in holiday_dates:
+            working_days += 1
+        cur += timedelta(days=1)
+
+    if not employees:
+        return {"month": month, "mandate": mandate, "working_days": working_days, "employees": []}
+
+    emp_codes = [e["emp_code"].upper() for e in employees]
+    employee_by_code = {e["emp_code"].upper(): e for e in employees}
+
+    LATE_CUTOFF = time(9, 30)
+    PRESENT_MINUTES = 540
+    HALF_DAY_MINUTES = 270
+
+    attendance_by_emp: dict = {code: [] for code in emp_codes}
+    try:
+        placeholders = ", ".join(["%s"] * len(emp_codes))
+        sql = f"""
+            SELECT
+                UserID,
+                CAST(Edatetime AS DATE) AS AttendanceDate,
+                MIN(Edatetime) AS FirstPunchIn,
+                MAX(Edatetime) AS LastPunchOut,
+                DATEDIFF(MINUTE, MIN(Edatetime), MAX(Edatetime)) AS WorkingMinutes
+            FROM Mx_ATDEventTrn
+            WHERE UserID IN ({placeholders})
+              AND Edatetime >= %s
+              AND Edatetime < %s
+            GROUP BY UserID, CAST(Edatetime AS DATE)
+        """
+        att_conn = get_attendance_connection()
+        try:
+            att_cursor = att_conn.cursor()
+            att_cursor.execute(sql, tuple(emp_codes) + (start_dt, end_dt + timedelta(days=1)))
+            for row in att_cursor.fetchall():
+                uid = str(row[0]).upper()
+                if uid in attendance_by_emp:
+                    attendance_by_emp[uid].append({
+                        "first_punch": row[2],
+                        "last_punch": row[3],
+                        "working_minutes": int(row[4] or 0)
+                    })
+        finally:
+            att_conn.close()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Attendance DB error: {exc}")
+
+    def _mins_to_hhmm(total_mins: float) -> str:
+        m = int(total_mins)
+        return f"{m // 60:02d}:{m % 60:02d}"
+
+    result = []
+    for emp in employees:
+        code = emp["emp_code"].upper()
+        records = attendance_by_emp.get(code, [])
+        present = half_day = late_days = total_minutes = 0
+        in_times: list = []
+        out_times: list = []
+
+        for rec in records:
+            wm = rec["working_minutes"]
+            total_minutes += wm
+            if wm >= PRESENT_MINUTES:
+                present += 1
+            elif wm >= HALF_DAY_MINUTES:
+                half_day += 1
+            else:
+                continue
+            fp = rec["first_punch"]
+            if not isinstance(fp, datetime):
+                fp = datetime.fromisoformat(str(fp))
+            if fp.time() > LATE_CUTOFF:
+                late_days += 1
+            in_times.append(fp.hour * 60 + fp.minute)
+            lp = rec["last_punch"]
+            if not isinstance(lp, datetime):
+                lp = datetime.fromisoformat(str(lp))
+            out_times.append(lp.hour * 60 + lp.minute)
+
+        absent = max(working_days - present - half_day, 0)
+        attended = present + half_day
+        avg_in = _mins_to_hhmm(sum(in_times) / len(in_times)) if in_times else None
+        avg_out = _mins_to_hhmm(sum(out_times) / len(out_times)) if out_times else None
+        total_h = total_minutes // 60
+        total_m = total_minutes % 60
+        late_pct = round(late_days / attended * 100, 1) if attended > 0 else 0.0
+        adh_pct = round(attended / working_days * 100, 1) if working_days > 0 else 0.0
+
+        result.append({
+            "emp_code": emp["emp_code"],
+            "name": emp["name"],
+            "process_name": emp["process_name"],
+            "lob_name": emp["lob_name"],
+            "manager_name": emp.get("manager_name"),
+            "avg_punch_in": avg_in,
+            "avg_punch_out": avg_out,
+            "total_login_hours": f"{total_h}:{total_m:02d}",
+            "present": present,
+            "half_day": half_day,
+            "absent": absent,
+            "late_days": late_days,
+            "working_days": working_days,
+            "late_percent": late_pct,
+            "adherence_percent": adh_pct
+        })
+
+    return {"month": month, "mandate": mandate, "working_days": working_days, "employees": result}
 
 @app.get("/api/attendance", response_model=list[AttendanceRecord])
 def get_attendance(
