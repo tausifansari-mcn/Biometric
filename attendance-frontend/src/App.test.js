@@ -358,6 +358,17 @@ test('shows the superadmin employee form and submits an Employee role', async ()
         })
       });
     }
+    if (url.includes('/api/agent-process/options')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          processes: ['Customer Support'],
+          lobs: ['Inbound'],
+          lobs_by_process: { 'Customer Support': ['Inbound'] }
+        })
+      });
+    }
     if (url.includes('/api/attendance') || url.includes('/api/holidays')) {
       return Promise.resolve({
         ok: true,
@@ -380,6 +391,7 @@ test('shows the superadmin employee form and submits an Employee role', async ()
   fireEvent.change(screen.getByLabelText('Employee Name'), { target: { value: 'New Employee' } });
   fireEvent.change(screen.getByLabelText('Designation'), { target: { value: 'Engineer' } });
   fireEvent.change(screen.getByLabelText('Employee Code'), { target: { value: 'mas10001' } });
+  await screen.findByRole('option', { name: 'Customer Support' });
   fireEvent.change(screen.getByLabelText('Process'), { target: { value: 'Customer Support' } });
   fireEvent.change(screen.getByLabelText('LOBName'), { target: { value: 'Inbound' } });
   fireEvent.click(screen.getByRole('button', { name: 'Add Employee' }));

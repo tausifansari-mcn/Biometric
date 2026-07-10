@@ -5,10 +5,23 @@ import './App.css';
 import ApplicationAccess from './ApplicationAccess';
 import ReportDashboard from './ReportDashboard';
 import RosterManagement from './RosterManagement';
+import AgentReport from './AgentReport';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL
   || `${window.location.protocol}//${window.location.hostname}:8000`;
 const PROFILE_STORAGE_KEY = 'attendanceProfileV2';
+
+// Bypass ngrok browser-warning interstitial for all API requests
+(function patchFetchForNgrok() {
+  const orig = window.fetch.bind(window);
+  window.fetch = (input, init = {}) => {
+    const url = typeof input === 'string' ? input : (input && input.url);
+    if (url && url.startsWith(API_BASE_URL)) {
+      init = { ...init, headers: { 'ngrok-skip-browser-warning': 'true', ...(init.headers || {}) } };
+    }
+    return orig(input, init);
+  };
+}());
 
 const toDateKey = (date) => (
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -18,7 +31,8 @@ const formatTime = (dateStr) => {
   if (!dateStr) return '-';
   return new Date(dateStr).toLocaleTimeString('en-IN', {
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
+    timeZone: 'Asia/Kolkata'
   });
 };
 
@@ -26,7 +40,8 @@ const formatDateTime = (dateStr) => {
   if (!dateStr) return '-';
   return new Date(dateStr).toLocaleString('en-IN', {
     dateStyle: 'medium',
-    timeStyle: 'short'
+    timeStyle: 'short',
+    timeZone: 'Asia/Kolkata'
   });
 };
 
@@ -59,7 +74,7 @@ const saveProfile = (profile) => {
 const getAllowedTasks = (role, isManager = false) => {
   const normalizedRole = String(role || '').toLowerCase();
   if (normalizedRole === 'superadmin') {
-    return ['my_report', 'reports', 'roster', 'access', 'employees', 'managers', 'queries', 'password_resets', 'holidays', 'support'];
+    return ['my_report', 'reports', 'agent_report', 'roster', 'access', 'employees', 'managers', 'queries', 'password_resets', 'holidays', 'support'];
   }
   if (normalizedRole === 'admin') return ['my_report', 'queries', 'holidays', 'support'];
   if (normalizedRole === 'manager' || isManager) {
@@ -385,6 +400,8 @@ function App() {
     setAttendanceSearchOpen(false);
     setError('');
   }, []);
+
+
 
   const roleRef = useRef(role);
   useEffect(() => { roleRef.current = role; }, [role]);
@@ -1388,7 +1405,9 @@ function App() {
       setEmployeeSearchActive(false);
       setEmployees([]);
       fetchEmployees();
+      fetchAgentProcessOptions();
     }
+    if (task === 'agent_report') fetchAgentProcessOptions();
     if (task === 'managers') fetchManagers();
     if (task === 'queries') fetchManagerQueries();
     if (task === 'password_resets') fetchPasswordResetRequests();
@@ -1740,6 +1759,15 @@ function App() {
                   View Reports
                 </button>
               )}
+              {allowedTasks.includes('agent_report') && (
+                <button
+                  className="profile-action profile-action-agent-report"
+                  type="button"
+                  onClick={() => openTask('agent_report')}
+                >
+                  Agent Report
+                </button>
+              )}
               {allowedTasks.includes('roster') && (
                 <button
                   className="profile-action profile-action-roster"
@@ -1859,6 +1887,15 @@ function App() {
               <span>R</span> Reports
             </button>
           )}
+          {allowedTasks.includes('agent_report') && (
+            <button
+              type="button"
+              className={activeAdminTask === 'agent_report' ? 'active' : ''}
+              onClick={() => openTask('agent_report')}
+            >
+              <span>G</span> Agent Report
+            </button>
+          )}
           {allowedTasks.includes('roster') && (
             <button
               type="button"
@@ -1956,6 +1993,8 @@ function App() {
           </button>
         </aside>
       )}
+
+
 
       {isSuperAdmin && !activeAdminTask && (
         <section className={`attendance-search-card ${attendanceSearchOpen ? 'is-open' : ''}`}>
@@ -2350,6 +2389,14 @@ function App() {
           token={token}
           initialMonth={selectedMonth}
           isSuperAdmin={isSuperAdmin}
+        />
+      )}
+
+      {activeAdminTask === 'agent_report' && (
+        <AgentReport
+          apiBaseUrl={API_BASE_URL}
+          token={token}
+          agentProcessOptions={agentProcessOptions}
         />
       )}
 
@@ -2862,21 +2909,45 @@ function App() {
             </label>
             <label>
               <span>Process</span>
-              <input
-                type="text"
+              <select
                 value={newEmployee.process_name}
-                onChange={(event) => updateNewEmployee('process_name', event.target.value)}
+                onChange={(event) => {
+                  updateNewEmployee('process_name', event.target.value);
+                  updateNewEmployee('lob_name', '');
+                }}
                 required
-              />
+              >
+                <option value="">Select Process</option>
+                {agentProcessOptions.processes.map((option) => (
+                  <option value={option} key={option}>{option}</option>
+                ))}
+                {newEmployee.process_name
+                  && !agentProcessOptions.processes.includes(newEmployee.process_name) && (
+                  <option value={newEmployee.process_name}>{newEmployee.process_name}</option>
+                )}
+              </select>
             </label>
             <label>
               <span>LOBName</span>
-              <input
-                type="text"
+              <select
                 value={newEmployee.lob_name}
+                disabled={!newEmployee.process_name}
                 onChange={(event) => updateNewEmployee('lob_name', event.target.value)}
                 required
-              />
+              >
+                <option value="">
+                  {newEmployee.process_name ? 'Select LOB' : 'Select Process first'}
+                </option>
+                {(agentProcessOptions.lobsByProcess[newEmployee.process_name] || [])
+                  .map((option) => (
+                    <option value={option} key={option}>{option}</option>
+                  ))}
+                {newEmployee.lob_name
+                  && !(agentProcessOptions.lobsByProcess[newEmployee.process_name] || [])
+                    .includes(newEmployee.lob_name) && (
+                  <option value={newEmployee.lob_name}>{newEmployee.lob_name}</option>
+                )}
+              </select>
             </label>
             <label>
               <span>Application Access</span>

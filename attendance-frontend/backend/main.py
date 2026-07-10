@@ -2,7 +2,15 @@ import base64
 import hashlib
 import hmac
 import os
+import re
 import secrets
+import smtplib
+from email.mime.application import MIMEApplication
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from html import escape as html_escape
+from io import BytesIO
+from openpyxl import Workbook
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Header, Depends, Query, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,6 +25,15 @@ import mysql.connector
 from mysql.connector import Error as MySQLError
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Literal, Optional
+
+def _fmt_ist(dt):
+    """Format a naive DB datetime (stored in IST) as ISO 8601 with +05:30 offset."""
+    if dt is None:
+        return None
+    if isinstance(dt, datetime):
+        return dt.strftime('%Y-%m-%dT%H:%M:%S+05:30')
+    return str(dt)
+
 import jwt
 
 load_dotenv()
@@ -29,6 +46,7 @@ _default_origins = (
     "http://127.0.0.1:3000",
     "https://biometric-78e6.vercel.app",
     "https://biometric-b9xd.vercel.app",
+    "https://annotation-equally-webster-pets.trycloudflare.com",
 )
 _raw_origins = os.getenv("CORS_ORIGINS", "")
 _configured_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
@@ -70,6 +88,15 @@ EMPLOYEE_CONFIG = {
     'user':     os.getenv("MYSQL_USER",     "root"),
     'password': os.getenv("MYSQL_PASSWORD", ""),
 }
+
+# 3. Email (Gmail SMTP, used to send Agent Report to managers)
+EMAIL_CONFIG = {
+    'host':     os.getenv("EMAIL_HOST", "smtp.gmail.com"),
+    'port':     int(os.getenv("EMAIL_PORT", "587")),
+    'user':     os.getenv("EMAIL_USER", ""),
+    'password': os.getenv("EMAIL_PASSWORD", ""),
+}
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 # ---------- Helper: MySQL Connection ----------
 def get_mysql_connection():
@@ -360,6 +387,43 @@ class AgentViewOut(BaseModel):
     mandate: int
     working_days: int
     employees: list[AgentViewEmployeeOut]
+
+class AgentReportRowOut(BaseModel):
+    emp_code: str
+    name: str
+    process_name: str
+    lob_name: str
+    punch_in: Optional[str]
+    punch_out: Optional[str]
+    total_hours: Optional[str]
+    present: bool
+
+class AgentReportMetricsOut(BaseModel):
+    total_agents: int
+    present: int
+    absent: int
+    avg_hours: Optional[str]
+
+class AgentReportLobSummaryOut(AgentReportMetricsOut):
+    lob_name: str
+
+class AgentReportOut(BaseModel):
+    date: str
+    process_options: list[str]
+    lob_options: list[str]
+    agents: list[AgentReportRowOut]
+    overall: AgentReportMetricsOut
+    by_lob: list[AgentReportLobSummaryOut]
+
+class AgentReportEmailRequest(BaseModel):
+    date: str
+    process_name: Optional[str] = None
+    lob_name: Optional[str] = None
+    email: str
+
+class AgentReportEmailOut(BaseModel):
+    sent: bool
+    email: str
 
 class SupportQueryOut(BaseModel):
     id: int
@@ -3651,6 +3715,340 @@ def get_agent_view(
 
     return {"month": month, "mandate": mandate, "working_days": working_days, "employees": result}
 
+def _build_agent_report(target_date: date, process_name: Optional[str], lob_name: Optional[str]):
+    """Scope active employees by Process/LOB, then attach that day's punch in/out from SQL Server."""
+    mysql_conn = get_mysql_connection()
+    mysql_cursor = mysql_conn.cursor(dictionary=True)
+    try:
+        ensure_agent_process_table(mysql_cursor)
+
+        emp_sql = """
+            SELECT DISTINCT
+                e.EmpCode AS emp_code,
+                e.EmpName AS name,
+                COALESCE(ap.`Process`, 'Unassigned') AS process_name,
+                COALESCE(ap.LOBName, 'Unassigned') AS lob_name
+            FROM EmployeeDetails e
+            LEFT JOIN AgentProcess ap ON ap.EmpCode = e.EmpCode
+            WHERE LOWER(COALESCE(e.Role, 'Employee')) = 'employee'
+        """
+        emp_params = []
+        if process_name:
+            emp_sql += " AND COALESCE(ap.`Process`, '') = %s"
+            emp_params.append(process_name)
+        if lob_name:
+            emp_sql += " AND COALESCE(ap.LOBName, '') = %s"
+            emp_params.append(lob_name)
+        emp_sql += " ORDER BY name"
+        mysql_cursor.execute(emp_sql, tuple(emp_params))
+        employees = mysql_cursor.fetchall()
+
+        mysql_cursor.execute(
+            "SELECT DISTINCT `Process` FROM AgentProcess WHERE COALESCE(TRIM(`Process`), '') <> '' ORDER BY `Process`"
+        )
+        process_options = [row["Process"] for row in mysql_cursor.fetchall()]
+        mysql_cursor.execute(
+            "SELECT DISTINCT LOBName FROM AgentProcess WHERE COALESCE(TRIM(LOBName), '') <> '' ORDER BY LOBName"
+        )
+        lob_options = [row["LOBName"] for row in mysql_cursor.fetchall()]
+    finally:
+        mysql_cursor.close()
+        mysql_conn.close()
+
+    if not employees:
+        return [], process_options, lob_options
+
+    emp_code_set = {e["emp_code"].upper() for e in employees}
+    punches_by_emp: dict = {}
+    try:
+        # Filter by date only (not a `UserID IN (...)` list) — EmployeeDetails can hold
+        # tens of thousands of historical rows, which blows past SQL Server's parameter
+        # limit and times out the connection. A single day's punches is a small, bounded
+        # result set, so scope to the requested employees in Python instead.
+        sql = """
+            SELECT
+                UserID,
+                MIN(Edatetime) AS FirstPunchIn,
+                MAX(Edatetime) AS LastPunchOut,
+                DATEDIFF(MINUTE, MIN(Edatetime), MAX(Edatetime)) AS WorkingMinutes
+            FROM Mx_ATDEventTrn
+            WHERE Edatetime >= %s
+              AND Edatetime < %s
+            GROUP BY UserID
+        """
+        day_start = datetime.combine(target_date, time.min)
+        day_end = day_start + timedelta(days=1)
+        att_conn = get_attendance_connection()
+        try:
+            att_cursor = att_conn.cursor()
+            try:
+                att_cursor.execute(sql, (day_start, day_end))
+                for row in att_cursor.fetchall():
+                    uid = str(row[0]).upper()
+                    if uid not in emp_code_set:
+                        continue
+                    punches_by_emp[uid] = {
+                        "first_punch": row[1],
+                        "last_punch": row[2],
+                        "working_minutes": max(0, int(row[3] or 0))
+                    }
+            finally:
+                att_cursor.close()
+        finally:
+            att_conn.close()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Attendance DB error: {exc}")
+
+    def _mins_to_hhmm(total_mins: float) -> str:
+        m = int(total_mins)
+        return f"{m // 60:02d}:{m % 60:02d}"
+
+    def _fmt_time(value) -> str:
+        if not isinstance(value, datetime):
+            value = datetime.fromisoformat(str(value))
+        return value.strftime("%H:%M")
+
+    rows = []
+    for emp in employees:
+        punch = punches_by_emp.get(emp["emp_code"].upper())
+        rows.append({
+            "emp_code": emp["emp_code"],
+            "name": emp["name"],
+            "process_name": emp["process_name"],
+            "lob_name": emp["lob_name"],
+            "punch_in": _fmt_time(punch["first_punch"]) if punch else None,
+            "punch_out": _fmt_time(punch["last_punch"]) if punch else None,
+            "total_hours": _mins_to_hhmm(punch["working_minutes"]) if punch else None,
+            "working_minutes": punch["working_minutes"] if punch else 0,
+            "present": punch is not None
+        })
+
+    return rows, process_options, lob_options
+
+def _summarize_agent_rows(rows):
+    """Overall + per-LOB counts (Total/Present/Absent/Avg Hours) for a set of agent-report rows."""
+    def _mins_to_hhmm(total_mins: float) -> str:
+        m = int(total_mins)
+        return f"{m // 60:02d}:{m % 60:02d}"
+
+    def _metrics(subset):
+        present_rows = [r for r in subset if r["present"]]
+        avg_hours = (
+            _mins_to_hhmm(sum(r["working_minutes"] for r in present_rows) / len(present_rows))
+            if present_rows else None
+        )
+        return {
+            "total_agents": len(subset),
+            "present": len(present_rows),
+            "absent": len(subset) - len(present_rows),
+            "avg_hours": avg_hours
+        }
+
+    overall = _metrics(rows)
+    by_lob_rows: dict = {}
+    for row in rows:
+        by_lob_rows.setdefault(row["lob_name"], []).append(row)
+    by_lob = [
+        {"lob_name": lob, **_metrics(subset)}
+        for lob, subset in sorted(by_lob_rows.items())
+    ]
+    return overall, by_lob
+
+def _parse_report_date(date_str: str) -> date:
+    try:
+        target_date = date.fromisoformat(date_str)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD")
+    if target_date > date.today():
+        raise HTTPException(status_code=400, detail="date cannot be in the future")
+    return target_date
+
+@app.get("/api/reports/agent-report", response_model=AgentReportOut)
+def get_agent_report(
+    date: str = Query(..., description="YYYY-MM-DD"),
+    process_name: Optional[str] = Query(None),
+    lob_name: Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user)
+):
+    """SuperAdmin only: agent-wise punch in/out/total hours for a single date, filterable by Process/LOB."""
+    if str(current_user.get("role", "")).lower() != "superadmin":
+        raise HTTPException(status_code=403, detail="SuperAdmin access required")
+
+    target_date = _parse_report_date(date)
+    rows, process_options, lob_options = _build_agent_report(target_date, process_name, lob_name)
+    overall, by_lob = _summarize_agent_rows(rows)
+    return {
+        "date": target_date.isoformat(),
+        "process_options": process_options,
+        "lob_options": lob_options,
+        "agents": rows,
+        "overall": overall,
+        "by_lob": by_lob
+    }
+
+def _build_agent_report_workbook(target_date: date, scope_label: str, overall, by_lob, rows) -> bytes:
+    wb = Workbook()
+
+    overview = wb.active
+    overview.title = "Overview"
+    overview.append(["Agent Punch Report", target_date.isoformat()])
+    overview.append(["Scope", scope_label])
+    overview.append([])
+    overview.append(["Total Agents", "Present", "Absent", "Avg Hours"])
+    overview.append([overall["total_agents"], overall["present"], overall["absent"], overall["avg_hours"] or "-"])
+    overview.append([])
+    overview.append(["LOB", "Total Agents", "Present", "Absent", "Avg Hours"])
+    for lob in by_lob:
+        overview.append([
+            lob["lob_name"], lob["total_agents"], lob["present"], lob["absent"], lob["avg_hours"] or "-"
+        ])
+
+    agents_sheet = wb.create_sheet("Agents")
+    agents_sheet.append(["Agent Name", "Emp Code", "Process", "LOB", "Punch In", "Punch Out", "Total Hours"])
+    for row in rows:
+        agents_sheet.append([
+            row["name"], row["emp_code"], row["process_name"], row["lob_name"],
+            row["punch_in"] or "-", row["punch_out"] or "-", row["total_hours"] or "-"
+        ])
+
+    buffer = BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()
+
+def _send_agent_report_email(to_email: str, target_date: date, process_name, lob_name, rows, overall, by_lob):
+    if not EMAIL_CONFIG["user"] or not EMAIL_CONFIG["password"]:
+        raise HTTPException(status_code=500, detail="Email is not configured on the server")
+
+    scope_bits = [bit for bit in (process_name, lob_name) if bit]
+    scope_label = " / ".join(scope_bits) if scope_bits else "All Processes"
+
+    cell = "padding:8px;border:1px solid #e2e8f0"
+
+    kpi_cards = "".join(
+        f"""<td style="padding:12px 18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px">
+              <div style="color:#64748b;font-size:11px;font-weight:700;text-transform:uppercase">{label}</div>
+              <div style="color:#0f172a;font-size:20px;font-weight:800">{value}</div>
+            </td><td style="width:10px"></td>"""
+        for label, value in [
+            ("Total Agents", overall["total_agents"]),
+            ("Present", overall["present"]),
+            ("Absent", overall["absent"]),
+            ("Avg Hours", overall["avg_hours"] or "-")
+        ]
+    )
+
+    lob_rows = "".join(
+        f"""<tr>
+            <td style="{cell}">{html_escape(lob['lob_name'])}</td>
+            <td style="{cell}">{lob['total_agents']}</td>
+            <td style="{cell}">{lob['present']}</td>
+            <td style="{cell}">{lob['absent']}</td>
+            <td style="{cell}">{lob['avg_hours'] or '-'}</td>
+        </tr>"""
+        for lob in by_lob
+    )
+
+    table_rows = "".join(
+        f"""<tr>
+            <td style="{cell}">{html_escape(r['name'])}</td>
+            <td style="{cell}">{html_escape(r['emp_code'])}</td>
+            <td style="{cell}">{html_escape(r['process_name'])}</td>
+            <td style="{cell}">{html_escape(r['lob_name'])}</td>
+            <td style="{cell}">{r['punch_in'] or '-'}</td>
+            <td style="{cell}">{r['punch_out'] or '-'}</td>
+            <td style="{cell}">{r['total_hours'] or '-'}</td>
+        </tr>"""
+        for r in rows
+    )
+    html_body = f"""
+    <div style="font-family:Arial,sans-serif">
+      <h2 style="color:#0f766e">Agent Punch Report — {target_date.isoformat()}</h2>
+      <p style="color:#475569">Scope: {html_escape(scope_label)}</p>
+
+      <table style="border-collapse:separate;border-spacing:0;margin:16px 0"><tr>{kpi_cards}</tr></table>
+
+      <h3 style="color:#334155;font-size:15px">LOB-wise Summary</h3>
+      <table style="border-collapse:collapse;font-size:14px;margin-bottom:20px">
+        <tr style="background:#f8fafc;text-align:left">
+          <th style="{cell}">LOB</th>
+          <th style="{cell}">Total Agents</th>
+          <th style="{cell}">Present</th>
+          <th style="{cell}">Absent</th>
+          <th style="{cell}">Avg Hours</th>
+        </tr>
+        {lob_rows}
+      </table>
+
+      <h3 style="color:#334155;font-size:15px">Agent-wise Detail</h3>
+      <table style="border-collapse:collapse;font-size:14px">
+        <tr style="background:#f8fafc;text-align:left">
+          <th style="{cell}">Agent Name</th>
+          <th style="{cell}">Emp Code</th>
+          <th style="{cell}">Process</th>
+          <th style="{cell}">LOB</th>
+          <th style="{cell}">Punch In</th>
+          <th style="{cell}">Punch Out</th>
+          <th style="{cell}">Total Hours</th>
+        </tr>
+        {table_rows}
+      </table>
+
+      <p style="color:#94a3b8;font-size:12px">Full detail also attached as an Excel file.</p>
+    </div>
+    """
+
+    message = MIMEMultipart("mixed")
+    message["Subject"] = f"Agent Punch Report - {target_date.isoformat()} - {scope_label}"
+    message["From"] = EMAIL_CONFIG["user"]
+    message["To"] = to_email
+    message.attach(MIMEText(html_body, "html"))
+
+    xlsx_bytes = _build_agent_report_workbook(target_date, scope_label, overall, by_lob, rows)
+    attachment = MIMEApplication(
+        xlsx_bytes,
+        _subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    attachment.add_header(
+        "Content-Disposition", "attachment",
+        filename=f"agent-report-{target_date.isoformat()}.xlsx"
+    )
+    message.attach(attachment)
+
+    try:
+        with smtplib.SMTP(EMAIL_CONFIG["host"], EMAIL_CONFIG["port"], timeout=90) as server:
+            server.starttls()
+            server.login(EMAIL_CONFIG["user"], EMAIL_CONFIG["password"])
+            server.sendmail(EMAIL_CONFIG["user"], [to_email], message.as_string())
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=502, detail="Failed to send email. Check the server's email configuration.")
+
+@app.post("/api/reports/agent-report/email", response_model=AgentReportEmailOut)
+def email_agent_report(
+    payload: AgentReportEmailRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """SuperAdmin only: email the agent-wise punch report (Date/Process/LOB scoped) to a manager."""
+    if str(current_user.get("role", "")).lower() != "superadmin":
+        raise HTTPException(status_code=403, detail="SuperAdmin access required")
+
+    target_date = _parse_report_date(payload.date)
+
+    to_email = payload.email.strip()
+    if not _EMAIL_RE.match(to_email):
+        raise HTTPException(status_code=400, detail="Enter a valid email address")
+
+    rows, _, _ = _build_agent_report(target_date, payload.process_name, payload.lob_name)
+    if not rows:
+        raise HTTPException(status_code=404, detail="No agents found for the selected filters")
+
+    overall, by_lob = _summarize_agent_rows(rows)
+    _send_agent_report_email(
+        to_email, target_date, payload.process_name, payload.lob_name, rows, overall, by_lob
+    )
+    return {"sent": True, "email": to_email}
+
 @app.get("/api/attendance", response_model=list[AttendanceRecord])
 def get_attendance(
     current_user: dict = Depends(get_current_user),
@@ -3786,8 +4184,8 @@ def get_attendance(
                     "Designation": emp_row.get("Designation", "Not specified"),
                     "Role": emp_row.get("Role", "Employee"),
                     "AttendanceDate": str(row[1]),
-                    "FirstPunchIn": str(row[2]),
-                    "LastPunchOut": str(row[3]),
+                    "FirstPunchIn": _fmt_ist(row[2]),
+                    "LastPunchOut": _fmt_ist(row[3]),
                     "TotalPunches": row[4],
                     "WorkingMinutes": row[5],
                     "WorkingHours": row[6]

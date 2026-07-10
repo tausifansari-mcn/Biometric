@@ -99,6 +99,8 @@ html, body {
 }
 .auth-link:hover { text-decoration: underline; }
 .login-hint { text-align: center; font-size: 0.7rem; color: #94a3b8; margin-top: 24px; }
+
+/* Backend status panel (SuperAdmin only) */
 .form-error {
   background: #fef2f2;
   color: #dc2626;
@@ -3476,4 +3478,168 @@ html, body {
 .profile-action-myreport {
   background: #1e3a5f;
   color: #fff;
+}
+
+/* ===== Agent Report ===== */
+.profile-action-agent-report {
+  background: #7c3aed;
+}
+.agent-report-panel {
+  border: 1px solid #ddd6fe;
+  box-shadow: 0 12px 28px rgba(109,40,217,0.08);
+}
+.agent-report-panel h3 {
+  color: #6d28d9;
+}
+.agent-report-send-btn {
+  min-height: 40px;
+  padding: 9px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: #7c3aed;
+  color: white;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+.agent-report-send-btn:hover {
+  background: #6d28d9;
+}
+.agent-report-filters {
+  grid-template-columns: repeat(3, minmax(140px, 1fr)) auto;
+}
+.agent-report-section-title {
+  margin: 18px 0 10px;
+  color: #6d28d9;
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.agent-report-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  margin-bottom: 18px;
+}
+.agent-report-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+.agent-report-table th {
+  background: #f8fafc;
+  padding: 10px 14px;
+  text-align: left;
+  font-weight: 700;
+  color: #475569;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+}
+.agent-report-table td {
+  padding: 9px 14px;
+  border-top: 1px solid #f1f5f9;
+}
+.agent-report-table tr.agent-report-absent td {
+  color: #94a3b8;
+}
+.agent-report-empty {
+  text-align: center;
+  padding: 24px;
+  color: #64748b;
+}
+
+/* ===== Generic Modal (used by Send Report, etc.) ===== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15,23,42,0.45);
+}
+.modal-card {
+  width: min(360px, 100%);
+  padding: 22px;
+  border-radius: 18px;
+  background: white;
+  box-shadow: 0 18px 45px rgba(15,23,42,0.2);
+}
+.modal-card h3 {
+  margin: 0 0 14px;
+  color: #6d28d9;
+}
+.modal-form {
+  display: grid;
+  gap: 12px;
+}
+.modal-form label {
+  display: grid;
+  gap: 6px;
+}
+.modal-form label > span {
+  color: #64748b;
+  font-size: 0.65rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.modal-form input,
+.modal-form select {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+  font: inherit;
+}
+.modal-form input:focus,
+.modal-form select:focus {
+  border-color: #7c3aed;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(124,58,237,0.12);
+}
+.modal-success {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f0fdf4;
+  color: #15803d;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+.modal-actions button[type="submit"] {
+  min-height: 40px;
+  padding: 9px 18px;
+  border: 0;
+  border-radius: 10px;
+  background: #7c3aed;
+  color: white;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+.modal-actions button[type="submit"]:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.modal-actions .cancel-btn {
+  min-height: 40px;
+  padding: 9px 18px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: white;
+  color: #475569;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
 }
