@@ -106,7 +106,37 @@ test('sends the report by email from the Send Report popup', async () => {
   const postCall = global.fetch.mock.calls.find(([, options]) => options?.method === 'POST');
   expect(postCall[0]).toBe('http://localhost:8000/api/reports/agent-report/email');
   expect(JSON.parse(postCall[1].body)).toEqual(
-    expect.objectContaining({ email: 'manager@company.com' })
+    expect.objectContaining({ email: 'manager@company.com', attendance: 'present' })
+  );
+});
+
+test('defaults the Send Report attendance filter to Present and allows changing it', async () => {
+  render(
+    <AgentReport
+      apiBaseUrl="http://localhost:8000"
+      token="test-token"
+      agentProcessOptions={agentProcessOptions}
+    />
+  );
+
+  await screen.findByText('Test Kumar');
+  fireEvent.click(screen.getByRole('button', { name: 'Send Report' }));
+
+  expect(screen.getByLabelText('Attendance').value).toBe('present');
+
+  fireEvent.change(screen.getByLabelText('Attendance'), { target: { value: 'absent' } });
+  fireEvent.change(screen.getByLabelText('Manager Email'), {
+    target: { value: 'manager@company.com' }
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+  await waitFor(() => (
+    expect(screen.getByText('Report sent to manager@company.com')).toBeInTheDocument()
+  ));
+
+  const postCall = global.fetch.mock.calls.find(([, options]) => options?.method === 'POST');
+  expect(JSON.parse(postCall[1].body)).toEqual(
+    expect.objectContaining({ attendance: 'absent' })
   );
 });
 

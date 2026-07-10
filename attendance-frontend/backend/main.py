@@ -419,6 +419,7 @@ class AgentReportEmailRequest(BaseModel):
     date: str
     process_name: Optional[str] = None
     lob_name: Optional[str] = None
+    attendance: Literal["present", "absent", "all"] = "present"
     email: str
 
 class AgentReportEmailOut(BaseModel):
@@ -3886,13 +3887,16 @@ def get_agent_report(
         "by_lob": by_lob
     }
 
-def _build_agent_report_workbook(target_date: date, scope_label: str, overall, by_lob, rows) -> bytes:
+def _build_agent_report_workbook(
+    target_date: date, scope_label: str, attendance_label: str, overall, by_lob, rows
+) -> bytes:
     wb = Workbook()
 
     overview = wb.active
     overview.title = "Overview"
     overview.append(["Agent Punch Report", target_date.isoformat()])
     overview.append(["Scope", scope_label])
+    overview.append(["Attendance", attendance_label])
     overview.append([])
     overview.append(["Total Agents", "Present", "Absent", "Avg Hours"])
     overview.append([overall["total_agents"], overall["present"], overall["absent"], overall["avg_hours"] or "-"])
@@ -3915,12 +3919,15 @@ def _build_agent_report_workbook(target_date: date, scope_label: str, overall, b
     wb.save(buffer)
     return buffer.getvalue()
 
-def _send_agent_report_email(to_email: str, target_date: date, process_name, lob_name, rows, overall, by_lob):
+def _send_agent_report_email(
+    to_email: str, target_date: date, process_name, lob_name, attendance, rows, overall, by_lob
+):
     if not EMAIL_CONFIG["user"] or not EMAIL_CONFIG["password"]:
         raise HTTPException(status_code=500, detail="Email is not configured on the server")
 
     scope_bits = [bit for bit in (process_name, lob_name) if bit]
     scope_label = " / ".join(scope_bits) if scope_bits else "All Processes"
+    attendance_label = {"present": "Present Only", "absent": "Absent Only", "all": "All"}.get(attendance, "All")
 
     cell = "padding:8px;border:1px solid #e2e8f0"
 
@@ -3964,6 +3971,7 @@ def _send_agent_report_email(to_email: str, target_date: date, process_name, lob
     <div style="font-family:Arial,sans-serif">
       <h2 style="color:#0f766e">Agent Punch Report — {target_date.isoformat()}</h2>
       <p style="color:#475569">Scope: {html_escape(scope_label)}</p>
+      <p style="color:#475569">Attendance: {attendance_label}</p>
 
       <table style="border-collapse:separate;border-spacing:0;margin:16px 0"><tr>{kpi_cards}</tr></table>
 
@@ -3998,12 +4006,16 @@ def _send_agent_report_email(to_email: str, target_date: date, process_name, lob
     """
 
     message = MIMEMultipart("mixed")
-    message["Subject"] = f"Agent Punch Report - {target_date.isoformat()} - {scope_label}"
+    message["Subject"] = (
+        f"Agent Punch Report - {target_date.isoformat()} - {scope_label} - {attendance_label}"
+    )
     message["From"] = EMAIL_CONFIG["user"]
     message["To"] = to_email
     message.attach(MIMEText(html_body, "html"))
 
-    xlsx_bytes = _build_agent_report_workbook(target_date, scope_label, overall, by_lob, rows)
+    xlsx_bytes = _build_agent_report_workbook(
+        target_date, scope_label, attendance_label, overall, by_lob, rows
+    )
     attachment = MIMEApplication(
         xlsx_bytes,
         _subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -4040,12 +4052,17 @@ def email_agent_report(
         raise HTTPException(status_code=400, detail="Enter a valid email address")
 
     rows, _, _ = _build_agent_report(target_date, payload.process_name, payload.lob_name)
+    if payload.attendance == "present":
+        rows = [row for row in rows if row["present"]]
+    elif payload.attendance == "absent":
+        rows = [row for row in rows if not row["present"]]
     if not rows:
         raise HTTPException(status_code=404, detail="No agents found for the selected filters")
 
     overall, by_lob = _summarize_agent_rows(rows)
     _send_agent_report_email(
-        to_email, target_date, payload.process_name, payload.lob_name, rows, overall, by_lob
+        to_email, target_date, payload.process_name, payload.lob_name,
+        payload.attendance, rows, overall, by_lob
     )
     return {"sent": True, "email": to_email}
 

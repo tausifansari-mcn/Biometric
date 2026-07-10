@@ -15,7 +15,9 @@ function AgentReport({ apiBaseUrl, token, agentProcessOptions }) {
   const [error, setError] = useState('');
 
   const [emailOpen, setEmailOpen] = useState(false);
-  const [emailForm, setEmailForm] = useState({ date: todayKey(), process_name: '', lob_name: '', email: '' });
+  const [emailForm, setEmailForm] = useState({
+    date: todayKey(), process_name: '', lob_name: '', attendance: 'present', email: ''
+  });
   const [emailStatus, setEmailStatus] = useState({ loading: false, message: '', error: '' });
 
   const fetchReport = useCallback(async () => {
@@ -60,6 +62,7 @@ function AgentReport({ apiBaseUrl, token, agentProcessOptions }) {
       date: appliedFilters.date,
       process_name: appliedFilters.process_name,
       lob_name: appliedFilters.lob_name,
+      attendance: 'present',
       email: ''
     });
     setEmailStatus({ loading: false, message: '', error: '' });
@@ -92,6 +95,7 @@ function AgentReport({ apiBaseUrl, token, agentProcessOptions }) {
           date: emailForm.date,
           process_name: emailForm.process_name || null,
           lob_name: emailForm.lob_name || null,
+          attendance: emailForm.attendance,
           email: emailForm.email.trim()
         })
       });
@@ -289,6 +293,17 @@ function AgentReport({ apiBaseUrl, token, agentProcessOptions }) {
                   {lobOptionsForEmail.map((option) => (
                     <option value={option} key={option}>{option}</option>
                   ))}
+                </select>
+              </label>
+              <label>
+                <span>Attendance</span>
+                <select
+                  value={emailForm.attendance}
+                  onChange={(event) => updateEmailField('attendance', event.target.value)}
+                >
+                  <option value="present">Present</option>
+                  <option value="absent">Absent</option>
+                  <option value="all">All</option>
                 </select>
               </label>
               <label>
