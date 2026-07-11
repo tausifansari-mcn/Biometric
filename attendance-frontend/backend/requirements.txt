@@ -6,3 +6,5 @@ python-dotenv==1.0.1
 pyjwt==2.10.1
 python-multipart==0.0.20
 openpyxl==3.1.5
+apscheduler==3.11.3
+tzdata==2026.3

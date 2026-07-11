@@ -990,6 +990,10 @@ html, body {
   background: #dcfce7;
   color: #15803d;
 }
+.status-completed {
+  background: #e2e8f0;
+  color: #475569;
+}
 .status-pending {
   background: #fef3c7;
   color: #b45309;
@@ -3505,6 +3509,25 @@ html, body {
 .agent-report-send-btn:hover {
   background: #6d28d9;
 }
+.agent-report-header-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.agent-report-secondary-btn {
+  min-height: 40px;
+  padding: 9px 16px;
+  border: 1px solid #ddd6fe;
+  border-radius: 10px;
+  background: white;
+  color: #6d28d9;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+.agent-report-secondary-btn:hover {
+  background: #f5f3ff;
+}
 .agent-report-filters {
   grid-template-columns: repeat(3, minmax(140px, 1fr)) auto;
 }
@@ -3642,4 +3665,51 @@ html, body {
   font: inherit;
   font-weight: 700;
   cursor: pointer;
+}
+.modal-card-wide {
+  width: min(880px, 100%);
+  max-height: 88vh;
+  overflow-y: auto;
+}
+.modal-subtitle {
+  margin: -6px 0 14px;
+  color: #64748b;
+  font-size: 0.82rem;
+}
+.modal-form-inline {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #eef2f7;
+}
+.modal-form-inline > .report-error,
+.modal-form-inline > .modal-success,
+.modal-form-inline > .modal-actions {
+  grid-column: 1 / -1;
+}
+.modal-table-actions {
+  display: flex;
+  gap: 6px;
+  white-space: nowrap;
+}
+.modal-table-actions button {
+  min-height: 30px;
+  padding: 5px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: white;
+  color: #475569;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.modal-table-actions button.cancel-btn {
+  border-color: #fecdd3;
+  color: #be123c;
+}
+.modal-table-actions button:hover {
+  background: #f8fafc;
 }

@@ -11,6 +11,10 @@ from email.mime.text import MIMEText
 from html import escape as html_escape
 from io import BytesIO
 from openpyxl import Workbook
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.date import DateTrigger
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Header, Depends, Query, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,6 +29,8 @@ import mysql.connector
 from mysql.connector import Error as MySQLError
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Literal, Optional
+
+IST = ZoneInfo("Asia/Kolkata")
 
 def _fmt_ist(dt):
     """Format a naive DB datetime (stored in IST) as ISO 8601 with +05:30 offset."""
@@ -97,6 +103,16 @@ EMAIL_CONFIG = {
     'password': os.getenv("EMAIL_PASSWORD", ""),
 }
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+def _parse_emails(raw: str) -> list:
+    """Split a comma-separated email string, validate each address, return the cleaned list."""
+    candidates = [part.strip() for part in raw.split(",") if part.strip()]
+    if not candidates:
+        raise HTTPException(status_code=400, detail="Enter at least one email address")
+    invalid = [c for c in candidates if not _EMAIL_RE.match(c)]
+    if invalid:
+        raise HTTPException(status_code=400, detail=f"Invalid email address: {invalid[0]}")
+    return candidates
 
 # ---------- Helper: MySQL Connection ----------
 def get_mysql_connection():
@@ -426,6 +442,42 @@ class AgentReportEmailOut(BaseModel):
     sent: bool
     email: str
 
+class ProcessContactCreate(BaseModel):
+    process_name: str
+    contact_name: str
+    email: str
+
+class ProcessContactOut(BaseModel):
+    id: int
+    process_name: str
+    contact_name: str
+    email: str
+
+class AgentReportScheduleCreate(BaseModel):
+    process_name: str
+    lob_name: Optional[str] = None
+    attendance: Literal["present", "absent", "all"] = "present"
+    frequency: Literal["daily", "once"] = "daily"
+    report_day: Literal["yesterday", "today"] = "yesterday"
+    run_date: Optional[str] = None
+    send_time: str
+    email: str
+    status: Literal["Active", "Paused"] = "Active"
+
+class AgentReportScheduleOut(BaseModel):
+    id: int
+    process_name: str
+    lob_name: Optional[str]
+    attendance: str
+    frequency: str
+    report_day: str
+    run_date: Optional[str]
+    send_time: str
+    email: str
+    status: str
+    last_sent_at: Optional[str]
+    last_sent_status: Optional[str]
+
 class SupportQueryOut(BaseModel):
     id: int
     employee_emp_code: str
@@ -519,6 +571,68 @@ def ensure_agent_process_table(cursor):
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         """
     )
+
+_SEED_PROCESS_CONTACTS = [
+    ("Bella-Vita Organic", "Dhananjaya Singh", "dhananjay@teammas.in"),
+    ("GNC", "Rohan Kumar", "rohan@teammas.in"),
+    ("Clovia", "Ashima", "ashima.kapila@teammas.in"),
+    ("Housing Premium", "Sameer", "sameer1@teammas.co.in"),
+    ("Housing.com Owner", "Sameeruddin", "sameer@teammas.in"),
+]
+
+def ensure_process_contacts_table(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS ProcessContacts (
+            ID INT NOT NULL AUTO_INCREMENT,
+            `Process` VARCHAR(191) NOT NULL,
+            ContactName VARCHAR(150) NOT NULL,
+            Email VARCHAR(255) NOT NULL,
+            CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UpdatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (ID),
+            UNIQUE KEY UQ_ProcessContacts_Process (`Process`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """
+    )
+    for process_name, contact_name, email in _SEED_PROCESS_CONTACTS:
+        cursor.execute(
+            "INSERT IGNORE INTO ProcessContacts (`Process`, ContactName, Email) VALUES (%s, %s, %s)",
+            (process_name, contact_name, email)
+        )
+
+def ensure_agent_report_schedules_table(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS AgentReportSchedules (
+            ID INT NOT NULL AUTO_INCREMENT,
+            `Process` VARCHAR(191) NOT NULL,
+            LOBName VARCHAR(191) NULL,
+            Attendance VARCHAR(20) NOT NULL DEFAULT 'present',
+            Frequency VARCHAR(20) NOT NULL DEFAULT 'daily',
+            ReportDay VARCHAR(20) NOT NULL DEFAULT 'yesterday',
+            RunDate DATE NULL,
+            SendTime VARCHAR(5) NOT NULL,
+            Email VARCHAR(500) NOT NULL,
+            Status VARCHAR(20) NOT NULL DEFAULT 'Active',
+            LastSentAt DATETIME NULL,
+            LastSentStatus VARCHAR(20) NULL,
+            CreatedBy VARCHAR(20) NULL,
+            CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (ID)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """
+    )
+    cursor.execute("SHOW COLUMNS FROM AgentReportSchedules LIKE 'Frequency'")
+    if not cursor.fetchone():
+        cursor.execute(
+            "ALTER TABLE AgentReportSchedules ADD COLUMN Frequency VARCHAR(20) NOT NULL DEFAULT 'daily' AFTER Attendance"
+        )
+    cursor.execute("SHOW COLUMNS FROM AgentReportSchedules LIKE 'RunDate'")
+    if not cursor.fetchone():
+        cursor.execute(
+            "ALTER TABLE AgentReportSchedules ADD COLUMN RunDate DATE NULL AFTER ReportDay"
+        )
 
 def ensure_application_access_table(cursor):
     cursor.execute(
@@ -3920,7 +4034,7 @@ def _build_agent_report_workbook(
     return buffer.getvalue()
 
 def _send_agent_report_email(
-    to_email: str, target_date: date, process_name, lob_name, attendance, rows, overall, by_lob
+    to_emails: list, target_date: date, process_name, lob_name, attendance, rows, overall, by_lob
 ):
     if not EMAIL_CONFIG["user"] or not EMAIL_CONFIG["password"]:
         raise HTTPException(status_code=500, detail="Email is not configured on the server")
@@ -4010,7 +4124,7 @@ def _send_agent_report_email(
         f"Agent Punch Report - {target_date.isoformat()} - {scope_label} - {attendance_label}"
     )
     message["From"] = EMAIL_CONFIG["user"]
-    message["To"] = to_email
+    message["To"] = ", ".join(to_emails)
     message.attach(MIMEText(html_body, "html"))
 
     xlsx_bytes = _build_agent_report_workbook(
@@ -4030,7 +4144,7 @@ def _send_agent_report_email(
         with smtplib.SMTP(EMAIL_CONFIG["host"], EMAIL_CONFIG["port"], timeout=90) as server:
             server.starttls()
             server.login(EMAIL_CONFIG["user"], EMAIL_CONFIG["password"])
-            server.sendmail(EMAIL_CONFIG["user"], [to_email], message.as_string())
+            server.sendmail(EMAIL_CONFIG["user"], to_emails, message.as_string())
     except HTTPException:
         raise
     except Exception:
@@ -4046,10 +4160,7 @@ def email_agent_report(
         raise HTTPException(status_code=403, detail="SuperAdmin access required")
 
     target_date = _parse_report_date(payload.date)
-
-    to_email = payload.email.strip()
-    if not _EMAIL_RE.match(to_email):
-        raise HTTPException(status_code=400, detail="Enter a valid email address")
+    to_emails = _parse_emails(payload.email)
 
     rows, _, _ = _build_agent_report(target_date, payload.process_name, payload.lob_name)
     if payload.attendance == "present":
@@ -4061,10 +4172,10 @@ def email_agent_report(
 
     overall, by_lob = _summarize_agent_rows(rows)
     _send_agent_report_email(
-        to_email, target_date, payload.process_name, payload.lob_name,
+        to_emails, target_date, payload.process_name, payload.lob_name,
         payload.attendance, rows, overall, by_lob
     )
-    return {"sent": True, "email": to_email}
+    return {"sent": True, "email": ", ".join(to_emails)}
 
 @app.get("/api/attendance", response_model=list[AttendanceRecord])
 def get_attendance(
@@ -4344,6 +4455,419 @@ def delete_holiday(holiday_id: int, current_user: dict = Depends(get_current_use
     conn.close()
     if affected == 0:
         raise HTTPException(status_code=404, detail="Holiday not found")
+    return {"message": "Deleted"}
+
+# ---------- Process Contacts (Process -> Name/Email, used to auto-fill scheduled reports) ----------
+
+def _contact_row_to_out(row):
+    return {
+        "id": row["ID"],
+        "process_name": row["Process"],
+        "contact_name": row["ContactName"],
+        "email": row["Email"]
+    }
+
+@app.get("/api/process-contacts", response_model=list[ProcessContactOut])
+def list_process_contacts(current_user: dict = Depends(get_current_user)):
+    """SuperAdmin only: list Process -> Name/Email contacts used for report automation."""
+    if str(current_user.get("role", "")).lower() != "superadmin":
+        raise HTTPException(status_code=403, detail="SuperAdmin access required")
+    conn = get_mysql_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        ensure_process_contacts_table(cursor)
+        conn.commit()
+        cursor.execute("SELECT ID, `Process`, ContactName, Email FROM ProcessContacts ORDER BY `Process`")
+        rows = cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
+    return [_contact_row_to_out(row) for row in rows]
+
+@app.post("/api/process-contacts", response_model=ProcessContactOut)
+def create_process_contact(payload: ProcessContactCreate, current_user: dict = Depends(get_current_user)):
+    """SuperAdmin only: add a Process -> Name/Email contact."""
+    if str(current_user.get("role", "")).lower() != "superadmin":
+        raise HTTPException(status_code=403, detail="SuperAdmin access required")
+    process_name = payload.process_name.strip()
+    contact_name = payload.contact_name.strip()
+    email = payload.email.strip()
+    if not process_name or not contact_name or not email:
+        raise HTTPException(status_code=400, detail="Process, Name, and Email are required")
+    if not _EMAIL_RE.match(email):
+        raise HTTPException(status_code=400, detail="Enter a valid email address")
+
+    conn = get_mysql_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        ensure_process_contacts_table(cursor)
+        cursor.execute(
+            "INSERT INTO ProcessContacts (`Process`, ContactName, Email) VALUES (%s, %s, %s)",
+            (process_name, contact_name, email)
+        )
+        conn.commit()
+        contact_id = cursor.lastrowid
+        cursor.execute("SELECT ID, `Process`, ContactName, Email FROM ProcessContacts WHERE ID = %s", (contact_id,))
+        row = cursor.fetchone()
+    except mysql.connector.IntegrityError:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=f"A contact for {process_name} already exists")
+    finally:
+        cursor.close()
+        conn.close()
+    return _contact_row_to_out(row)
+
+@app.put("/api/process-contacts/{contact_id}", response_model=ProcessContactOut)
+def update_process_contact(
+    contact_id: int, payload: ProcessContactCreate, current_user: dict = Depends(get_current_user)
+):
+    """SuperAdmin only: update a Process -> Name/Email contact."""
+    if str(current_user.get("role", "")).lower() != "superadmin":
+        raise HTTPException(status_code=403, detail="SuperAdmin access required")
+    process_name = payload.process_name.strip()
+    contact_name = payload.contact_name.strip()
+    email = payload.email.strip()
+    if not process_name or not contact_name or not email:
+        raise HTTPException(status_code=400, detail="Process, Name, and Email are required")
+    if not _EMAIL_RE.match(email):
+        raise HTTPException(status_code=400, detail="Enter a valid email address")
+
+    conn = get_mysql_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        ensure_process_contacts_table(cursor)
+        cursor.execute(
+            "UPDATE ProcessContacts SET `Process` = %s, ContactName = %s, Email = %s WHERE ID = %s",
+            (process_name, contact_name, email, contact_id)
+        )
+        conn.commit()
+        cursor.execute("SELECT ID, `Process`, ContactName, Email FROM ProcessContacts WHERE ID = %s", (contact_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Contact not found")
+    except HTTPException:
+        raise
+    except mysql.connector.IntegrityError:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=f"A contact for {process_name} already exists")
+    finally:
+        cursor.close()
+        conn.close()
+    return _contact_row_to_out(row)
+
+@app.delete("/api/process-contacts/{contact_id}")
+def delete_process_contact(contact_id: int, current_user: dict = Depends(get_current_user)):
+    """SuperAdmin only: remove a Process contact."""
+    if str(current_user.get("role", "")).lower() != "superadmin":
+        raise HTTPException(status_code=403, detail="SuperAdmin access required")
+    conn = get_mysql_connection()
+    cursor = conn.cursor()
+    try:
+        ensure_process_contacts_table(cursor)
+        cursor.execute("DELETE FROM ProcessContacts WHERE ID = %s", (contact_id,))
+        conn.commit()
+        affected = cursor.rowcount
+    finally:
+        cursor.close()
+        conn.close()
+    if affected == 0:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    return {"message": "Deleted"}
+
+# ---------- Agent Report Schedules (auto-send Agent Report on a daily cron) ----------
+
+_scheduler = BackgroundScheduler(timezone=IST)
+_SEND_TIME_RE = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
+
+def _schedule_row_to_out(row):
+    return {
+        "id": row["ID"],
+        "process_name": row["Process"],
+        "lob_name": row["LOBName"],
+        "attendance": row["Attendance"],
+        "frequency": row["Frequency"],
+        "report_day": row["ReportDay"],
+        "run_date": row["RunDate"].isoformat() if row["RunDate"] else None,
+        "send_time": row["SendTime"],
+        "email": row["Email"],
+        "status": row["Status"],
+        "last_sent_at": row["LastSentAt"].isoformat() if row["LastSentAt"] else None,
+        "last_sent_status": row["LastSentStatus"]
+    }
+
+def _register_schedule_job(schedule_id: int, frequency: str, send_time: str, run_date=None):
+    hour, minute = map(int, send_time.split(":"))
+    if frequency == "once":
+        run_at = datetime.combine(run_date, time(hour, minute), tzinfo=IST)
+        trigger = DateTrigger(run_date=run_at, timezone=IST)
+    else:
+        trigger = CronTrigger(hour=hour, minute=minute, timezone=IST)
+    _scheduler.add_job(
+        _run_scheduled_agent_report,
+        trigger=trigger,
+        args=[schedule_id],
+        id=f"agent-schedule-{schedule_id}",
+        replace_existing=True
+    )
+
+def _remove_schedule_job(schedule_id: int):
+    job = _scheduler.get_job(f"agent-schedule-{schedule_id}")
+    if job:
+        _scheduler.remove_job(job.id)
+
+def _run_scheduled_agent_report(schedule_id: int):
+    """APScheduler job target: build + send one scheduled Agent Report. Must never raise."""
+    conn = get_mysql_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT `Process`, LOBName, Attendance, Frequency, ReportDay, RunDate, Email, Status
+            FROM AgentReportSchedules WHERE ID = %s
+            """,
+            (schedule_id,)
+        )
+        row = cursor.fetchone()
+    finally:
+        cursor.close()
+        conn.close()
+
+    if not row or row["Status"] != "Active":
+        return
+
+    process_name = row["Process"]
+    lob_name = row["LOBName"]
+    attendance = row["Attendance"]
+    is_one_time = row["Frequency"] == "once"
+    target_date = (
+        row["RunDate"] if is_one_time
+        else (date.today() - timedelta(days=1) if row["ReportDay"] == "yesterday" else date.today())
+    )
+    emails = [e.strip() for e in row["Email"].split(",") if e.strip()]
+
+    status_label = "Success"
+    try:
+        rows, _, _ = _build_agent_report(target_date, process_name, lob_name)
+        if attendance == "present":
+            rows = [r for r in rows if r["present"]]
+        elif attendance == "absent":
+            rows = [r for r in rows if not r["present"]]
+        if not rows:
+            status_label = "No Data"
+        else:
+            overall, by_lob = _summarize_agent_rows(rows)
+            _send_agent_report_email(
+                emails, target_date, process_name, lob_name, attendance, rows, overall, by_lob
+            )
+    except Exception:
+        status_label = "Failed"
+
+    conn = get_mysql_connection()
+    cursor = conn.cursor()
+    try:
+        if is_one_time:
+            cursor.execute(
+                """
+                UPDATE AgentReportSchedules
+                SET LastSentAt = %s, LastSentStatus = %s, Status = 'Completed'
+                WHERE ID = %s
+                """,
+                (datetime.now(IST).replace(tzinfo=None), status_label, schedule_id)
+            )
+        else:
+            cursor.execute(
+                "UPDATE AgentReportSchedules SET LastSentAt = %s, LastSentStatus = %s WHERE ID = %s",
+                (datetime.now(IST).replace(tzinfo=None), status_label, schedule_id)
+            )
+        conn.commit()
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.on_event("startup")
+def _start_agent_report_scheduler():
+    conn = get_mysql_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        ensure_agent_report_schedules_table(cursor)
+        conn.commit()
+        cursor.execute(
+            "SELECT ID, Frequency, SendTime, RunDate FROM AgentReportSchedules WHERE Status = 'Active'"
+        )
+        rows = cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
+    for row in rows:
+        if row["Frequency"] == "once":
+            if not row["RunDate"]:
+                continue
+            hour, minute = map(int, row["SendTime"].split(":"))
+            run_at = datetime.combine(row["RunDate"], time(hour, minute), tzinfo=IST)
+            if run_at <= datetime.now(IST):
+                continue
+        _register_schedule_job(row["ID"], row["Frequency"], row["SendTime"], row["RunDate"])
+    if not _scheduler.running:
+        _scheduler.start()
+
+@app.on_event("shutdown")
+def _stop_agent_report_scheduler():
+    if _scheduler.running:
+        _scheduler.shutdown(wait=False)
+
+@app.get("/api/agent-report/schedules", response_model=list[AgentReportScheduleOut])
+def list_agent_report_schedules(current_user: dict = Depends(get_current_user)):
+    """SuperAdmin only: list all Agent Report auto-send schedules."""
+    if str(current_user.get("role", "")).lower() != "superadmin":
+        raise HTTPException(status_code=403, detail="SuperAdmin access required")
+    conn = get_mysql_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        ensure_agent_report_schedules_table(cursor)
+        conn.commit()
+        cursor.execute(
+            f"SELECT {_SCHEDULE_COLUMNS} FROM AgentReportSchedules ORDER BY `Process`, SendTime"
+        )
+        rows = cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
+    return [_schedule_row_to_out(row) for row in rows]
+
+_SCHEDULE_COLUMNS = (
+    "ID, `Process`, LOBName, Attendance, Frequency, ReportDay, RunDate, "
+    "SendTime, Email, Status, LastSentAt, LastSentStatus"
+)
+
+def _validate_schedule_payload(payload: AgentReportScheduleCreate):
+    """Shared create/update validation. Returns the parsed RunDate (or None for daily schedules)."""
+    if not payload.process_name.strip():
+        raise HTTPException(status_code=400, detail="Process is required")
+    if not _SEND_TIME_RE.match(payload.send_time):
+        raise HTTPException(status_code=400, detail="send_time must be HH:MM (24h)")
+
+    run_date = None
+    if payload.frequency == "once":
+        if not payload.run_date:
+            raise HTTPException(status_code=400, detail="run_date is required for a one-time schedule")
+        try:
+            run_date = date.fromisoformat(payload.run_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="run_date must be YYYY-MM-DD")
+        hour, minute = map(int, payload.send_time.split(":"))
+        run_at = datetime.combine(run_date, time(hour, minute), tzinfo=IST)
+        if run_at <= datetime.now(IST):
+            raise HTTPException(status_code=400, detail="Pick a date and time in the future")
+    return run_date
+
+@app.post("/api/agent-report/schedules", response_model=AgentReportScheduleOut)
+def create_agent_report_schedule(
+    payload: AgentReportScheduleCreate, current_user: dict = Depends(get_current_user)
+):
+    """SuperAdmin only: create a daily or one-time auto-send schedule for the Agent Report."""
+    if str(current_user.get("role", "")).lower() != "superadmin":
+        raise HTTPException(status_code=403, detail="SuperAdmin access required")
+    process_name = payload.process_name.strip()
+    run_date = _validate_schedule_payload(payload)
+    emails = _parse_emails(payload.email)
+
+    conn = get_mysql_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        ensure_agent_report_schedules_table(cursor)
+        cursor.execute(
+            """
+            INSERT INTO AgentReportSchedules
+                (`Process`, LOBName, Attendance, Frequency, ReportDay, RunDate, SendTime, Email, Status, CreatedBy)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                process_name, payload.lob_name.strip() if payload.lob_name else None,
+                payload.attendance, payload.frequency, payload.report_day, run_date, payload.send_time,
+                ", ".join(emails), payload.status, current_user["emp_code"]
+            )
+        )
+        conn.commit()
+        schedule_id = cursor.lastrowid
+        cursor.execute(
+            f"SELECT {_SCHEDULE_COLUMNS} FROM AgentReportSchedules WHERE ID = %s",
+            (schedule_id,)
+        )
+        row = cursor.fetchone()
+    finally:
+        cursor.close()
+        conn.close()
+
+    if payload.status == "Active":
+        _register_schedule_job(schedule_id, payload.frequency, payload.send_time, run_date)
+    return _schedule_row_to_out(row)
+
+@app.put("/api/agent-report/schedules/{schedule_id}", response_model=AgentReportScheduleOut)
+def update_agent_report_schedule(
+    schedule_id: int, payload: AgentReportScheduleCreate, current_user: dict = Depends(get_current_user)
+):
+    """SuperAdmin only: update a schedule (also used to Pause/Resume by toggling status)."""
+    if str(current_user.get("role", "")).lower() != "superadmin":
+        raise HTTPException(status_code=403, detail="SuperAdmin access required")
+    process_name = payload.process_name.strip()
+    run_date = _validate_schedule_payload(payload)
+    emails = _parse_emails(payload.email)
+
+    conn = get_mysql_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        ensure_agent_report_schedules_table(cursor)
+        cursor.execute(
+            """
+            UPDATE AgentReportSchedules
+            SET `Process` = %s, LOBName = %s, Attendance = %s, Frequency = %s, ReportDay = %s,
+                RunDate = %s, SendTime = %s, Email = %s, Status = %s
+            WHERE ID = %s
+            """,
+            (
+                process_name, payload.lob_name.strip() if payload.lob_name else None,
+                payload.attendance, payload.frequency, payload.report_day, run_date, payload.send_time,
+                ", ".join(emails), payload.status, schedule_id
+            )
+        )
+        conn.commit()
+        cursor.execute(
+            f"SELECT {_SCHEDULE_COLUMNS} FROM AgentReportSchedules WHERE ID = %s",
+            (schedule_id,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Schedule not found")
+    except HTTPException:
+        raise
+    finally:
+        cursor.close()
+        conn.close()
+
+    if payload.status == "Active":
+        _register_schedule_job(schedule_id, payload.frequency, payload.send_time, run_date)
+    else:
+        _remove_schedule_job(schedule_id)
+    return _schedule_row_to_out(row)
+
+@app.delete("/api/agent-report/schedules/{schedule_id}")
+def delete_agent_report_schedule(schedule_id: int, current_user: dict = Depends(get_current_user)):
+    """SuperAdmin only: delete a schedule."""
+    if str(current_user.get("role", "")).lower() != "superadmin":
+        raise HTTPException(status_code=403, detail="SuperAdmin access required")
+    conn = get_mysql_connection()
+    cursor = conn.cursor()
+    try:
+        ensure_agent_report_schedules_table(cursor)
+        cursor.execute("DELETE FROM AgentReportSchedules WHERE ID = %s", (schedule_id,))
+        conn.commit()
+        affected = cursor.rowcount
+    finally:
+        cursor.close()
+        conn.close()
+    _remove_schedule_job(schedule_id)
+    if affected == 0:
+        raise HTTPException(status_code=404, detail="Schedule not found")
     return {"message": "Deleted"}
 
 if __name__ == "__main__":

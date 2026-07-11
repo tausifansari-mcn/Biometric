@@ -94,7 +94,7 @@ test('sends the report by email from the Send Report popup', async () => {
   await screen.findByText('Test Kumar');
   fireEvent.click(screen.getByRole('button', { name: 'Send Report' }));
 
-  fireEvent.change(screen.getByLabelText('Manager Email'), {
+  fireEvent.change(screen.getByLabelText('Manager Email(s)'), {
     target: { value: 'manager@company.com' }
   });
   fireEvent.click(screen.getByRole('button', { name: 'Send' }));
@@ -125,7 +125,7 @@ test('defaults the Send Report attendance filter to Present and allows changing 
   expect(screen.getByLabelText('Attendance').value).toBe('present');
 
   fireEvent.change(screen.getByLabelText('Attendance'), { target: { value: 'absent' } });
-  fireEvent.change(screen.getByLabelText('Manager Email'), {
+  fireEvent.change(screen.getByLabelText('Manager Email(s)'), {
     target: { value: 'manager@company.com' }
   });
   fireEvent.click(screen.getByRole('button', { name: 'Send' }));
@@ -152,11 +152,38 @@ test('rejects an invalid email address without calling the API', async () => {
   await screen.findByText('Test Kumar');
   fireEvent.click(screen.getByRole('button', { name: 'Send Report' }));
 
-  fireEvent.change(screen.getByLabelText('Manager Email'), {
+  fireEvent.change(screen.getByLabelText('Manager Email(s)'), {
     target: { value: 'not-an-email' }
   });
   fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-  expect(await screen.findByText('Enter a valid email address')).toBeInTheDocument();
+  expect(
+    await screen.findByText('Enter one or more valid, comma-separated email addresses')
+  ).toBeInTheDocument();
   expect(global.fetch.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false);
+});
+
+test('accepts multiple comma-separated emails when sending', async () => {
+  render(
+    <AgentReport
+      apiBaseUrl="http://localhost:8000"
+      token="test-token"
+      agentProcessOptions={agentProcessOptions}
+    />
+  );
+
+  await screen.findByText('Test Kumar');
+  fireEvent.click(screen.getByRole('button', { name: 'Send Report' }));
+
+  fireEvent.change(screen.getByLabelText('Manager Email(s)'), {
+    target: { value: 'a@company.com, b@company.com' }
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+  await waitFor(() => (
+    expect(global.fetch.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(true)
+  ));
+
+  const postCall = global.fetch.mock.calls.find(([, options]) => options?.method === 'POST');
+  expect(JSON.parse(postCall[1].body).email).toBe('a@company.com, b@company.com');
 });

@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import ProcessContactsModal from './ProcessContactsModal';
+import AgentReportScheduleModal from './AgentReportScheduleModal';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const parseEmails = (raw) => raw.split(',').map((part) => part.trim()).filter(Boolean);
 
 const todayKey = () => {
   const now = new Date();
@@ -19,6 +22,8 @@ function AgentReport({ apiBaseUrl, token, agentProcessOptions }) {
     date: todayKey(), process_name: '', lob_name: '', attendance: 'present', email: ''
   });
   const [emailStatus, setEmailStatus] = useState({ loading: false, message: '', error: '' });
+  const [contactsModalOpen, setContactsModalOpen] = useState(false);
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
 
   const fetchReport = useCallback(async () => {
     setLoading(true);
@@ -79,8 +84,9 @@ function AgentReport({ apiBaseUrl, token, agentProcessOptions }) {
 
   const submitEmail = async (event) => {
     event.preventDefault();
-    if (!EMAIL_RE.test(emailForm.email.trim())) {
-      setEmailStatus({ loading: false, message: '', error: 'Enter a valid email address' });
+    const emails = parseEmails(emailForm.email);
+    if (!emails.length || emails.some((email) => !EMAIL_RE.test(email))) {
+      setEmailStatus({ loading: false, message: '', error: 'Enter one or more valid, comma-separated email addresses' });
       return;
     }
     setEmailStatus({ loading: true, message: '', error: '' });
@@ -96,7 +102,7 @@ function AgentReport({ apiBaseUrl, token, agentProcessOptions }) {
           process_name: emailForm.process_name || null,
           lob_name: emailForm.lob_name || null,
           attendance: emailForm.attendance,
-          email: emailForm.email.trim()
+          email: emails.join(', ')
         })
       });
       const data = await response.json().catch(() => ({}));
@@ -122,9 +128,17 @@ function AgentReport({ apiBaseUrl, token, agentProcessOptions }) {
           <span className="panel-kicker">SuperAdmin Administration</span>
           <h3>Agent Report</h3>
         </div>
-        <button type="button" className="agent-report-send-btn" onClick={openEmailModal}>
-          Send Report
-        </button>
+        <div className="agent-report-header-actions">
+          <button type="button" className="agent-report-secondary-btn" onClick={() => setContactsModalOpen(true)}>
+            Manage Contacts
+          </button>
+          <button type="button" className="agent-report-secondary-btn" onClick={() => setScheduleModalOpen(true)}>
+            Schedule Report
+          </button>
+          <button type="button" className="agent-report-send-btn" onClick={openEmailModal}>
+            Send Report
+          </button>
+        </div>
       </div>
 
       <form className="report-filters agent-report-filters" onSubmit={submitFilters}>
@@ -307,10 +321,10 @@ function AgentReport({ apiBaseUrl, token, agentProcessOptions }) {
                 </select>
               </label>
               <label>
-                <span>Manager Email</span>
+                <span>Manager Email(s)</span>
                 <input
-                  type="email"
-                  placeholder="manager@company.com"
+                  type="text"
+                  placeholder="a@company.com, b@company.com"
                   value={emailForm.email}
                   onChange={(event) => updateEmailField('email', event.target.value)}
                   required
@@ -327,6 +341,24 @@ function AgentReport({ apiBaseUrl, token, agentProcessOptions }) {
             </form>
           </div>
         </div>
+      )}
+
+      {contactsModalOpen && (
+        <ProcessContactsModal
+          apiBaseUrl={apiBaseUrl}
+          token={token}
+          agentProcessOptions={agentProcessOptions}
+          onClose={() => setContactsModalOpen(false)}
+        />
+      )}
+
+      {scheduleModalOpen && (
+        <AgentReportScheduleModal
+          apiBaseUrl={apiBaseUrl}
+          token={token}
+          agentProcessOptions={agentProcessOptions}
+          onClose={() => setScheduleModalOpen(false)}
+        />
       )}
     </section>
   );
